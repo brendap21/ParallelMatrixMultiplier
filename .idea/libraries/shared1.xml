@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="shared1">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/shared/lib/shared.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
