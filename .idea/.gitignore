@@ -6,7 +6,3 @@
 # Datasource local storage ignored files
 /dataSources/
 /dataSources.local.xml
-
-.client/bin/
-.server/bin/
-.shared/bin/

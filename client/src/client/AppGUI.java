@@ -3,6 +3,7 @@ package client;
 import javax.swing.*;
 import javax.swing.table.*;
 import java.awt.*;
+import java.awt.event.ActionEvent;
 import java.util.Random;
 import java.util.concurrent.*;
 
@@ -34,13 +35,13 @@ public class AppGUI extends JFrame {
         pnlTop.add(txtThreads);
 
         JButton btnGen = new JButton("Generar Matrices");
-        JButton btnSeq = new JButton("Secuencial");
-        JButton btnConc = new JButton("Concurrente");
-        JButton btnPar = new JButton("Paralelo");
+        JButton btnRunSeq = new JButton("Multiplicar Secuencial");
+        JButton btnRunConc = new JButton("Multiplicar Concurrente");
+        JButton btnRunPar = new JButton("Multiplicar Paralelo");
         pnlTop.add(btnGen);
-        pnlTop.add(btnSeq);
-        pnlTop.add(btnConc);
-        pnlTop.add(btnPar);
+        pnlTop.add(btnRunSeq);
+        pnlTop.add(btnRunConc);
+        pnlTop.add(btnRunPar);
 
         add(pnlTop, BorderLayout.NORTH);
 
@@ -86,15 +87,15 @@ public class AppGUI extends JFrame {
 
         // --------- ACCIONES ----------
         btnGen.addActionListener(e -> generateMatrices());
-        btnSeq.addActionListener(e -> runSequential());
-        btnConc.addActionListener(e -> runConcurrent());
-        btnPar.addActionListener(e -> runParallel());
+        btnRunSeq.addActionListener(e -> runSequential());
+        btnRunConc.addActionListener(e -> runConcurrent());
+        btnRunPar.addActionListener(e -> runParallel());
 
         btnViewA.addActionListener(e -> showFullMatrix(A, "Matriz A"));
         btnViewB.addActionListener(e -> showFullMatrix(B, "Matriz B"));
         btnViewC.addActionListener(e -> showFullMatrix(C, "Matriz C"));
 
-        setSize(1100, 650);
+        setSize(1200, 700);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
     }
@@ -105,18 +106,19 @@ public class AppGUI extends JFrame {
         Random rnd = new Random();
         A = new int[n][n];
         B = new int[n][n];
-        for (int i = 0; i < n; i++)
+        for (int i = 0; i < n; i++) {
             for (int j = 0; j < n; j++) {
                 A[i][j] = rnd.nextInt(10);
                 B[i][j] = rnd.nextInt(10);
             }
+        }
         statusArea.append("Matrices generadas de " + n + "x" + n + "\n");
         display(tblA, A);
         display(tblB, B);
         display(tblC, null);
     }
 
-    /** Muestra una tabla con numeración y previsualización de 10x10 */
+    /** Muestra una tabla con numeración y previsualización de 10x10, mejoras visuales incluidas */
     private void display(JTable tbl, int[][] M) {
         if (M == null) {
             tbl.setModel(new DefaultTableModel());
@@ -133,105 +135,111 @@ public class AppGUI extends JFrame {
         Object[][] data = new Object[preview][preview + 1];
         for (int i = 0; i < preview; i++) {
             data[i][0] = (i + 1);
-            for (int j = 0; j < preview; j++)
-                data[i][j + 1] = M[i][j];
+            for (int j = 0; j < preview; j++) data[i][j + 1] = M[i][j];
         }
 
         DefaultTableModel model = new DefaultTableModel(data, cols);
         tbl.setModel(model);
 
-        DefaultTableCellRenderer center = new DefaultTableCellRenderer();
-        center.setHorizontalAlignment(JLabel.CENTER);
-        for (int i = 0; i < tbl.getColumnCount(); i++)
-            tbl.getColumnModel().getColumn(i).setCellRenderer(center);
+        tbl.setFont(new Font("Monospaced", Font.PLAIN, 14));
+        tbl.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        tbl.setFillsViewportHeight(true);
+
+        // Ajustar ancho de columnas según contenido
+        for (int i = 0; i < tbl.getColumnCount(); i++) {
+            TableColumn col = tbl.getColumnModel().getColumn(i);
+            col.setPreferredWidth(40);
+        }
+
+        // Render personalizado
+        tbl.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table,
+                                                           Object value,
+                                                           boolean isSelected,
+                                                           boolean hasFocus,
+                                                           int row,
+                                                           int column) {
+                JLabel lbl = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                lbl.setHorizontalAlignment(JLabel.CENTER);
+
+                // Zebra
+                lbl.setBackground(row % 2 == 0 ? new Color(230, 230, 250) : Color.WHITE);
+
+                // Diagonal principal
+                if (row == column - 1) lbl.setBackground(new Color(144, 238, 144));
+
+                // Valores altos o mínimos
+                if (value instanceof Integer) {
+                    int val = (Integer) value;
+                    if (val >= 8) lbl.setForeground(Color.RED);
+                    else if (val == 0) lbl.setForeground(Color.GRAY);
+                    else lbl.setForeground(Color.BLACK);
+                }
+
+                return lbl;
+            }
+        });
+
         tbl.setRowHeight(22);
     }
 
-    /** Ejecuta multiplicación secuencial con progreso en tiempo real */
+    /** Ejecuta multiplicaciones secuencial con progreso en tiempo real */
     private void runSequential() {
         if (A == null || B == null) {
             JOptionPane.showMessageDialog(this, "Primero genera las matrices.");
             return;
         }
+        int n = A.length;
+        C = new int[n][n];
+        progressBar.setMaximum(n);
+        progressBar.setValue(0);
 
         SwingWorker<Void, Integer> worker = new SwingWorker<>() {
-            long startTime;
             @Override
             protected Void doInBackground() {
-                int n = A.length;
-                C = new int[n][n];
-                progressBar.setMaximum(n);
-                progressBar.setValue(0);
-                startTime = System.currentTimeMillis();
-
+                long start = System.currentTimeMillis();
                 for (int i = 0; i < n; i++) {
                     for (int j = 0; j < n; j++) {
                         int sum = 0;
-                        for (int k = 0; k < n; k++)
-                            sum += A[i][k] * B[k][j];
+                        for (int k = 0; k < n; k++) sum += A[i][k] * B[k][j];
                         C[i][j] = sum;
                     }
-                    publish(i + 1); // fila completada
+                    publish(i);
                 }
+                long end = System.currentTimeMillis();
+                lblTimeSeq.setText("Secuencial: " + (end - start) + " ms");
                 return null;
             }
 
             @Override
             protected void process(java.util.List<Integer> chunks) {
-                int last = chunks.get(chunks.size() - 1);
-                progressBar.setValue(last);
-                statusArea.append("Secuencial: fila " + last + " completada\n");
-            }
-
-            @Override
-            protected void done() {
-                long t = System.currentTimeMillis() - startTime;
-                lblTimeSeq.setText("Secuencial: " + t + " ms");
+                for (int row : chunks) {
+                    progressBar.setValue(progressBar.getValue() + 1);
+                    statusArea.append("Secuencial: fila " + (row + 1) + " completada\n");
+                }
                 display(tblC, C);
-                statusArea.append("Secuencial completado en " + t + " ms\n");
             }
         };
         worker.execute();
     }
 
-    /** Ejecuta multiplicación concurrente con progreso en tiempo real */
+    /** Ejecuta multiplicaciones concurrente con hilos manuales */
     private void runConcurrent() {
+        int threads = Integer.parseInt(txtThreads.getText().trim());
         if (A == null || B == null) {
             JOptionPane.showMessageDialog(this, "Primero genera las matrices.");
             return;
         }
-        int threads = Integer.parseInt(txtThreads.getText().trim());
-        long startTime = System.currentTimeMillis();
-        C = multiplyConcurrent(A, B, threads, "Concurrente");
-        long t = System.currentTimeMillis() - startTime;
-        lblTimeConc.setText("Concurrente: " + t + " ms");
-        display(tblC, C);
-    }
-
-    /** Ejecuta multiplicación paralela con progreso en tiempo real */
-    private void runParallel() {
-        if (A == null || B == null) {
-            JOptionPane.showMessageDialog(this, "Primero genera las matrices.");
-            return;
-        }
-        int threads = Integer.parseInt(txtThreads.getText().trim());
-        long startTime = System.currentTimeMillis();
-        C = multiplyParallel(A, B, threads, "Paralelo");
-        long t = System.currentTimeMillis() - startTime;
-        lblTimePar.setText("Paralelo: " + t + " ms");
-        display(tblC, C);
-    }
-
-    /** Multiplicación concurrente con hilos manuales */
-    private int[][] multiplyConcurrent(int[][] A, int[][] B, int threads, String tag) {
         int n = A.length;
-        int[][] C = new int[n][n];
-        Thread[] workers = new Thread[threads];
-        int rowsPerThread = n / threads;
-
+        C = new int[n][n];
         progressBar.setMaximum(n);
         progressBar.setValue(0);
 
+        Thread[] workers = new Thread[threads];
+        int rowsPerThread = n / threads;
+
+        long start = System.currentTimeMillis();
         for (int t = 0; t < threads; t++) {
             final int from = t * rowsPerThread;
             final int to = (t == threads - 1) ? n : (t + 1) * rowsPerThread;
@@ -245,7 +253,7 @@ public class AppGUI extends JFrame {
                     int fi = i;
                     SwingUtilities.invokeLater(() -> {
                         progressBar.setValue(progressBar.getValue() + 1);
-                        statusArea.append(tag + ": fila " + (fi + 1) + " completada\n");
+                        statusArea.append("Concurrente: fila " + (fi + 1) + " completada\n");
                     });
                 }
             });
@@ -254,18 +262,25 @@ public class AppGUI extends JFrame {
         for (Thread w : workers) {
             try { w.join(); } catch (InterruptedException ignored) {}
         }
-        return C;
+        long end = System.currentTimeMillis();
+        lblTimeConc.setText("Concurrente: " + (end - start) + " ms");
+        display(tblC, C);
     }
 
-    /** Multiplicación paralela con ExecutorService */
-    private int[][] multiplyParallel(int[][] A, int[][] B, int threads, String tag) {
+    /** Ejecuta multiplicaciones paralelo con ExecutorService */
+    private void runParallel() {
+        int threads = Integer.parseInt(txtThreads.getText().trim());
+        if (A == null || B == null) {
+            JOptionPane.showMessageDialog(this, "Primero genera las matrices.");
+            return;
+        }
         int n = A.length;
-        int[][] C = new int[n][n];
-        ExecutorService exec = Executors.newFixedThreadPool(threads);
-
+        C = new int[n][n];
         progressBar.setMaximum(n);
         progressBar.setValue(0);
 
+        ExecutorService exec = Executors.newFixedThreadPool(threads);
+        long start = System.currentTimeMillis();
         for (int i = 0; i < n; i++) {
             final int row = i;
             exec.submit(() -> {
@@ -276,16 +291,18 @@ public class AppGUI extends JFrame {
                 }
                 SwingUtilities.invokeLater(() -> {
                     progressBar.setValue(progressBar.getValue() + 1);
-                    statusArea.append(tag + ": fila " + (row + 1) + " completada\n");
+                    statusArea.append("Paralelo: fila " + (row + 1) + " completada\n");
                 });
             });
         }
         exec.shutdown();
         try { exec.awaitTermination(1, TimeUnit.HOURS); } catch (InterruptedException ignored) {}
-        return C;
+        long end = System.currentTimeMillis();
+        lblTimePar.setText("Paralelo: " + (end - start) + " ms");
+        display(tblC, C);
     }
 
-    /** Muestra la matriz completa en una nueva ventana */
+    /** Muestra la matriz completa en una nueva ventana con scroll, zebra y resaltados */
     private void showFullMatrix(int[][] M, String title) {
         if (M == null) return;
         int n = M.length;
@@ -297,20 +314,48 @@ public class AppGUI extends JFrame {
         Object[][] data = new Object[n][n + 1];
         for (int i = 0; i < n; i++) {
             data[i][0] = (i + 1);
-            for (int j = 0; j < n; j++)
-                data[i][j + 1] = M[i][j];
+            for (int j = 0; j < n; j++) data[i][j + 1] = M[i][j];
         }
 
         JTable table = new JTable(new DefaultTableModel(data, cols));
-        DefaultTableCellRenderer center = new DefaultTableCellRenderer();
-        center.setHorizontalAlignment(JLabel.CENTER);
-        for (int i = 0; i < table.getColumnCount(); i++)
-            table.getColumnModel().getColumn(i).setCellRenderer(center);
+        table.setFont(new Font("Monospaced", Font.PLAIN, 14));
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         table.setRowHeight(22);
 
+        // Ajuste ancho de columnas
+        for (int i = 0; i < table.getColumnCount(); i++)
+            table.getColumnModel().getColumn(i).setPreferredWidth(40);
+
+        // Render personalizado
+        table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table,
+                                                           Object value,
+                                                           boolean isSelected,
+                                                           boolean hasFocus,
+                                                           int row,
+                                                           int column) {
+                JLabel lbl = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                lbl.setHorizontalAlignment(JLabel.CENTER);
+                lbl.setBackground(row % 2 == 0 ? new Color(230, 230, 250) : Color.WHITE);
+                if (row == column - 1) lbl.setBackground(new Color(144, 238, 144));
+                if (value instanceof Integer) {
+                    int val = (Integer) value;
+                    if (val >= 8) lbl.setForeground(Color.RED);
+                    else if (val == 0) lbl.setForeground(Color.GRAY);
+                    else lbl.setForeground(Color.BLACK);
+                }
+                return lbl;
+            }
+        });
+
+        JScrollPane scrollPane = new JScrollPane(table);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+
         JFrame frame = new JFrame(title);
-        frame.add(new JScrollPane(table));
-        frame.setSize(600, 400);
+        frame.add(scrollPane);
+        frame.setSize(800, 600);
         frame.setLocationRelativeTo(this);
         frame.setVisible(true);
     }
