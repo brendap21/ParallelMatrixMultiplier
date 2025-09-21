@@ -46,6 +46,8 @@ public class AppGUI extends JFrame {
         public LogEntry(String msg, LogType type) { this.msg = msg; this.type = type; }
     }
 
+    private long startTimeSeq;
+
     public AppGUI() {
         super("Multiplicador de Matrices");
 
@@ -391,10 +393,11 @@ public class AppGUI extends JFrame {
 
         appendInfo("Ejecutando secuencial...\n");
 
+        startTimeSeq = System.currentTimeMillis();
+
         SwingWorker<Void, Integer> worker = new SwingWorker<>() {
             @Override
             protected Void doInBackground() {
-                long start = System.currentTimeMillis();
                 for (int i = 0; i < n; i++) {
                     for (int j = 0; j < n; j++) {
                         int sum = 0;
@@ -403,11 +406,6 @@ public class AppGUI extends JFrame {
                     }
                     publish(i);
                 }
-                long end = System.currentTimeMillis();
-                SwingUtilities.invokeLater(() -> {
-                    lblTimeSeq.setText("Secuencial: " + (end - start) + " ms");
-                    appendSuccess("Ejecución secuencial completada en " + (end - start) + " ms\n");
-                });
                 return null;
             }
 
@@ -420,6 +418,12 @@ public class AppGUI extends JFrame {
                     appendProgress("[Secuencial] fila " + (row + 1) + " completada\n");
                 }
                 display(tblC, C);
+                // Mostrar mensaje de éxito solo al finalizar la última fila
+                if (progressBar.getValue() == progressBar.getMaximum()) {
+                    long end = System.currentTimeMillis();
+                    lblTimeSeq.setText("Secuencial: " + (end - startTimeSeq) + " ms");
+                    appendSuccess("Ejecución secuencial completada en " + (end - startTimeSeq) + " ms\n");
+                }
             }
         };
         worker.execute();
