@@ -6,6 +6,8 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.util.Random;
 import java.util.concurrent.*;
+import java.util.List;
+import java.util.ArrayList;
 
 /**
  * GUI principal para probar la multiplicación de matrices
@@ -18,6 +20,7 @@ public class AppGUI extends JFrame {
     private JProgressBar progressBar;
     private JTextField txtSize, txtThreads;
     private JLabel lblTimeSeq, lblTimeConc, lblTimePar;
+    private JPanel threadStatusPanel;
 
     public AppGUI() {
         super("Multiplicador de Matrices");
@@ -25,7 +28,7 @@ public class AppGUI extends JFrame {
         setLayout(new BorderLayout(5, 5));
 
         // --------- TOP: controles principales ----------
-        JPanel pnlTop = new JPanel(new FlowLayout());
+        JPanel pnlTop = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
         pnlTop.add(new JLabel("Tamaño (n):"));
         txtSize = new JTextField("10", 5);
         pnlTop.add(txtSize);
@@ -58,30 +61,51 @@ public class AppGUI extends JFrame {
         JButton btnViewB = new JButton("Ver Completa B");
         JButton btnViewC = new JButton("Ver Completa C");
 
-        JPanel pnlCenter = new JPanel(new GridLayout(1, 3));
+        JPanel pnlCenter = new JPanel();
+        pnlCenter.setLayout(new BoxLayout(pnlCenter, BoxLayout.X_AXIS));
         pnlCenter.add(wrapTitled("Matriz A", spA, btnViewA));
         pnlCenter.add(wrapTitled("Matriz B", spB, btnViewB));
         pnlCenter.add(wrapTitled("Matriz C", spC, btnViewC));
         add(pnlCenter, BorderLayout.CENTER);
 
-        // --------- SOUTH: barra de progreso, tiempos y logs ----------
-        JPanel pnlBottom = new JPanel(new BorderLayout(5, 5));
-
+        // --------- PANEL INFERIOR: progreso, tiempos y logs ----------
+        JPanel pnlBottom = new JPanel(new BorderLayout(5,5));
         progressBar = new JProgressBar();
         pnlBottom.add(progressBar, BorderLayout.NORTH);
 
-        JPanel pnlTimes = new JPanel(new GridLayout(1, 3));
+        // Panel de hilos, tiempos y consola en la misma fila
+        JPanel pnlStatusRow = new JPanel();
+        pnlStatusRow.setLayout(new BoxLayout(pnlStatusRow, BoxLayout.X_AXIS));
+
+        // PANEL 1: estado de hilos
+        threadStatusPanel = new JPanel();
+        threadStatusPanel.setLayout(new BoxLayout(threadStatusPanel, BoxLayout.Y_AXIS));
+        JScrollPane threadScroll = new JScrollPane(threadStatusPanel);
+        threadScroll.setPreferredSize(new Dimension(150, 300));
+        pnlStatusRow.add(threadScroll);
+
+        // PANEL 2: tiempos de ejecución
+        JPanel pnlTimes = new JPanel(new GridLayout(3,1,5,5));
         lblTimeSeq = new JLabel("Secuencial: - ms", JLabel.CENTER);
         lblTimeConc = new JLabel("Concurrente: - ms", JLabel.CENTER);
         lblTimePar = new JLabel("Paralelo: - ms", JLabel.CENTER);
         pnlTimes.add(lblTimeSeq);
         pnlTimes.add(lblTimeConc);
         pnlTimes.add(lblTimePar);
-        pnlBottom.add(pnlTimes, BorderLayout.CENTER);
+        pnlTimes.setMaximumSize(new Dimension(200, 300));
+        pnlStatusRow.add(Box.createRigidArea(new Dimension(10,0)));
+        pnlStatusRow.add(pnlTimes);
 
-        statusArea = new JTextArea(8, 40);
+        // PANEL 3: consola/logs
+        statusArea = new JTextArea();
         statusArea.setEditable(false);
-        pnlBottom.add(new JScrollPane(statusArea), BorderLayout.SOUTH);
+        JScrollPane logScroll = new JScrollPane(statusArea);
+        logScroll.setPreferredSize(new Dimension(400, 300));
+        pnlStatusRow.add(Box.createRigidArea(new Dimension(10,0)));
+        pnlStatusRow.add(logScroll);
+
+        pnlBottom.add(pnlStatusRow, BorderLayout.CENTER);
+        pnlBottom.setPreferredSize(new Dimension(0, 300));
 
         add(pnlBottom, BorderLayout.SOUTH);
 
@@ -96,6 +120,7 @@ public class AppGUI extends JFrame {
         btnViewC.addActionListener(e -> showFullMatrix(C, "Matriz C"));
 
         setSize(1200, 700);
+        setMinimumSize(new Dimension(1000, 600));
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
     }
@@ -106,12 +131,11 @@ public class AppGUI extends JFrame {
         Random rnd = new Random();
         A = new int[n][n];
         B = new int[n][n];
-        for (int i = 0; i < n; i++) {
+        for (int i = 0; i < n; i++)
             for (int j = 0; j < n; j++) {
                 A[i][j] = rnd.nextInt(10);
                 B[i][j] = rnd.nextInt(10);
             }
-        }
         statusArea.append("Matrices generadas de " + n + "x" + n + "\n");
         display(tblA, A);
         display(tblB, B);
@@ -145,13 +169,9 @@ public class AppGUI extends JFrame {
         tbl.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         tbl.setFillsViewportHeight(true);
 
-        // Ajustar ancho de columnas según contenido
-        for (int i = 0; i < tbl.getColumnCount(); i++) {
-            TableColumn col = tbl.getColumnModel().getColumn(i);
-            col.setPreferredWidth(40);
-        }
+        for (int i = 0; i < tbl.getColumnCount(); i++)
+            tbl.getColumnModel().getColumn(i).setPreferredWidth(40);
 
-        // Render personalizado
         tbl.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table,
@@ -162,21 +182,14 @@ public class AppGUI extends JFrame {
                                                            int column) {
                 JLabel lbl = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
                 lbl.setHorizontalAlignment(JLabel.CENTER);
-
-                // Zebra
                 lbl.setBackground(row % 2 == 0 ? new Color(230, 230, 250) : Color.WHITE);
-
-                // Diagonal principal
                 if (row == column - 1) lbl.setBackground(new Color(144, 238, 144));
-
-                // Valores altos o mínimos
                 if (value instanceof Integer) {
                     int val = (Integer) value;
                     if (val >= 8) lbl.setForeground(Color.RED);
                     else if (val == 0) lbl.setForeground(Color.GRAY);
                     else lbl.setForeground(Color.BLACK);
                 }
-
                 return lbl;
             }
         });
@@ -236,6 +249,16 @@ public class AppGUI extends JFrame {
         progressBar.setMaximum(n);
         progressBar.setValue(0);
 
+        threadStatusPanel.removeAll();
+        JProgressBar[] threadBars = new JProgressBar[threads];
+        for (int t = 0; t < threads; t++) {
+            threadBars[t] = new JProgressBar(0, n / threads + 1);
+            threadBars[t].setStringPainted(true);
+            threadStatusPanel.add(threadBars[t]);
+        }
+        threadStatusPanel.revalidate();
+        threadStatusPanel.repaint();
+
         Thread[] workers = new Thread[threads];
         int rowsPerThread = n / threads;
 
@@ -243,6 +266,7 @@ public class AppGUI extends JFrame {
         for (int t = 0; t < threads; t++) {
             final int from = t * rowsPerThread;
             final int to = (t == threads - 1) ? n : (t + 1) * rowsPerThread;
+            final int threadIndex = t;
             workers[t] = new Thread(() -> {
                 for (int i = from; i < to; i++) {
                     for (int j = 0; j < n; j++) {
@@ -250,10 +274,11 @@ public class AppGUI extends JFrame {
                         for (int k = 0; k < n; k++) sum += A[i][k] * B[k][j];
                         C[i][j] = sum;
                     }
-                    int fi = i;
+                    final int fi = i;
                     SwingUtilities.invokeLater(() -> {
                         progressBar.setValue(progressBar.getValue() + 1);
                         statusArea.append("Concurrente: fila " + (fi + 1) + " completada\n");
+                        threadBars[threadIndex].setValue(threadBars[threadIndex].getValue() + 1);
                     });
                 }
             });
@@ -322,11 +347,9 @@ public class AppGUI extends JFrame {
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         table.setRowHeight(22);
 
-        // Ajuste ancho de columnas
         for (int i = 0; i < table.getColumnCount(); i++)
             table.getColumnModel().getColumn(i).setPreferredWidth(40);
 
-        // Render personalizado
         table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table,
@@ -339,37 +362,27 @@ public class AppGUI extends JFrame {
                 lbl.setHorizontalAlignment(JLabel.CENTER);
                 lbl.setBackground(row % 2 == 0 ? new Color(230, 230, 250) : Color.WHITE);
                 if (row == column - 1) lbl.setBackground(new Color(144, 238, 144));
-                if (value instanceof Integer) {
-                    int val = (Integer) value;
-                    if (val >= 8) lbl.setForeground(Color.RED);
-                    else if (val == 0) lbl.setForeground(Color.GRAY);
-                    else lbl.setForeground(Color.BLACK);
-                }
                 return lbl;
             }
         });
 
-        JScrollPane scrollPane = new JScrollPane(table);
-        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-
-        JFrame frame = new JFrame(title);
-        frame.add(scrollPane);
-        frame.setSize(800, 600);
-        frame.setLocationRelativeTo(this);
-        frame.setVisible(true);
+        JFrame f = new JFrame(title);
+        f.add(new JScrollPane(table));
+        f.setSize(800, 600);
+        f.setLocationRelativeTo(this);
+        f.setVisible(true);
     }
 
-    private JPanel wrapTitled(String title, JScrollPane scroll, JButton btn) {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(BorderFactory.createTitledBorder(title));
-        panel.add(scroll, BorderLayout.CENTER);
-        if (btn != null) {
-            JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-            south.add(btn);
-            panel.add(south, BorderLayout.SOUTH);
-        }
-        return panel;
+    private JPanel wrapTitled(String title, JScrollPane tableScroll, JButton btnView) {
+        JPanel pnl = new JPanel();
+        pnl.setLayout(new BorderLayout(5,5));
+        pnl.setBorder(BorderFactory.createTitledBorder(title));
+        pnl.add(tableScroll, BorderLayout.CENTER);
+        JPanel pnlBtn = new JPanel();
+        pnlBtn.add(btnView);
+        pnl.add(pnlBtn, BorderLayout.SOUTH);
+        pnl.setMaximumSize(new Dimension(400, Integer.MAX_VALUE));
+        return pnl;
     }
 
     public static void main(String[] args) {
