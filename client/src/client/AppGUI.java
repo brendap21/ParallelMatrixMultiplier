@@ -34,6 +34,18 @@ public class AppGUI extends JFrame {
     private List<Long> threadStartTimes = new ArrayList<>();
     private List<Integer> threadTotalRows = new ArrayList<>();
 
+    private enum LogType { INFO, PROGRESS, SUCCESS, ERROR, WARNING }
+    private JComboBox<String> filterCombo;
+    private JButton btnClearLog; // btnExportLog eliminado
+    private List<LogEntry> logEntries = new ArrayList<>();
+    private boolean autoScroll = true;
+
+    private static class LogEntry {
+        String msg;
+        LogType type;
+        public LogEntry(String msg, LogType type) { this.msg = msg; this.type = type; }
+    }
+
     public AppGUI() {
         super("Multiplicador de Matrices");
 
@@ -120,13 +132,34 @@ public class AppGUI extends JFrame {
 
         // PANEL 3: consola/logs (JTextPane para colores)
         statusPane = new JTextPane();
-        statusPane.setEditable(false);
+        statusPane.setEditable(true); // copiable
         statusPane.setFont(new Font("Monospaced", Font.PLAIN, 12));
         statusDoc = statusPane.getStyledDocument();
+        statusPane.addCaretListener(e -> {
+            JScrollBar vbar = ((JScrollPane)statusPane.getParent().getParent()).getVerticalScrollBar();
+            autoScroll = vbar.getValue() + vbar.getVisibleAmount() >= vbar.getMaximum();
+        });
         JScrollPane logScroll = new JScrollPane(statusPane);
         logScroll.setPreferredSize(new Dimension(520, 260));
+
+        // Filtros y botones
+        JPanel logControlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
+        filterCombo = new JComboBox<>(new String[]{"Todos", "Progreso", "Errores"});
+        filterCombo.addActionListener(e -> refreshLogView());
+        btnClearLog = new JButton("Limpiar consola");
+        btnClearLog.addActionListener(e -> clearLog());
+        // btnExportLog eliminado
+        logControlPanel.add(new JLabel("Filtro:"));
+        logControlPanel.add(filterCombo);
+        logControlPanel.add(btnClearLog);
+        // logControlPanel.add(btnExportLog); // eliminado
+
+        JPanel logPanel = new JPanel(new BorderLayout());
+        logPanel.add(logControlPanel, BorderLayout.NORTH);
+        logPanel.add(logScroll, BorderLayout.CENTER);
+        logPanel.setPreferredSize(new Dimension(520, 260));
         pnlStatusRow.add(Box.createRigidArea(new Dimension(10,0)));
-        pnlStatusRow.add(logScroll);
+        pnlStatusRow.add(logPanel);
 
         pnlBottom.add(pnlStatusRow, BorderLayout.CENTER);
         pnlBottom.setPreferredSize(new Dimension(0, 320));
@@ -234,22 +267,64 @@ public class AppGUI extends JFrame {
         tbl.setRowHeight(22);
     }
 
-    // --------- UTIL: consola con colores
-    private void appendStyled(String msg, Color color) {
+    // --------- UTIL: consola con colores y estilos
+    private void appendStyled(String msg, LogType type) {
+        logEntries.add(new LogEntry(msg, type));
+        if (!shouldShow(type)) return;
         try {
             SimpleAttributeSet aset = new SimpleAttributeSet();
-            StyleConstants.setForeground(aset, color);
+            switch (type) {
+                case INFO:
+                    StyleConstants.setForeground(aset, Color.BLUE);
+                    break;
+                case PROGRESS:
+                    StyleConstants.setForeground(aset, new Color(30, 144, 255));
+                    break;
+                case SUCCESS:
+                    StyleConstants.setForeground(aset, new Color(0,128,0));
+                    StyleConstants.setBold(aset, true);
+                    break;
+                case ERROR:
+                    StyleConstants.setForeground(aset, Color.RED);
+                    StyleConstants.setBold(aset, true);
+                    break;
+                case WARNING:
+                    StyleConstants.setForeground(aset, new Color(255, 140, 0));
+                    StyleConstants.setItalic(aset, true);
+                    break;
+            }
             statusDoc.insertString(statusDoc.getLength(), msg, aset);
-            statusPane.setCaretPosition(statusDoc.getLength());
+            if (autoScroll) statusPane.setCaretPosition(statusDoc.getLength());
         } catch (BadLocationException e) {
             e.printStackTrace();
         }
     }
-
-    private void appendInfo(String msg) { appendStyled(msg, Color.BLACK); }
-    private void appendProgress(String msg) { appendStyled(msg, Color.BLUE); }
-    private void appendSuccess(String msg) { appendStyled(msg, new Color(0,128,0)); }
-    private void appendError(String msg) { appendStyled(msg, Color.RED); }
+    private boolean shouldShow(LogType type) {
+        String sel = (String)filterCombo.getSelectedItem();
+        if (sel == null || sel.equals("Todos")) return true;
+        if (sel.equals("Progreso")) return type == LogType.PROGRESS;
+        if (sel.equals("Errores")) return type == LogType.ERROR;
+        return true;
+    }
+    private void refreshLogView() {
+        statusPane.setText("");
+        List<LogEntry> entriesCopy = new ArrayList<>(logEntries); // evitar ConcurrentModificationException
+        for (LogEntry entry : entriesCopy) {
+            if (shouldShow(entry.type)) {
+                appendStyled(entry.msg, entry.type);
+            }
+        }
+    }
+    private void clearLog() {
+        logEntries.clear();
+        statusPane.setText("");
+    }
+    // exportLog eliminado
+    private void appendInfo(String msg) { appendStyled("[INFO] ➡ " + msg, LogType.INFO); }
+    private void appendProgress(String msg) { appendStyled("[PROGRESO] " + msg, LogType.PROGRESS); }
+    private void appendSuccess(String msg) { appendStyled("[ÉXITO] ✔ " + msg, LogType.SUCCESS); }
+    private void appendError(String msg) { appendStyled("[ERROR] ✖ " + msg, LogType.ERROR); }
+    private void appendWarning(String msg) { appendStyled("[ADVERTENCIA] ⚠ " + msg, LogType.WARNING); }
 
     // --------- RESET panel de hilos
     private void resetThreadPanel() {
@@ -329,7 +404,10 @@ public class AppGUI extends JFrame {
                     publish(i);
                 }
                 long end = System.currentTimeMillis();
-                SwingUtilities.invokeLater(() -> lblTimeSeq.setText("Secuencial: " + (end - start) + " ms"));
+                SwingUtilities.invokeLater(() -> {
+                    lblTimeSeq.setText("Secuencial: " + (end - start) + " ms");
+                    appendSuccess("Ejecución secuencial completada en " + (end - start) + " ms\n");
+                });
                 return null;
             }
 
