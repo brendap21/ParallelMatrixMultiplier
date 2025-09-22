@@ -270,6 +270,8 @@ public class AppGUI extends JFrame {
     }
 
     // --------- UTIL: consola con colores y estilos
+    private final Object logLock = new Object();
+
     private void appendStyled(String msg, LogType type) {
         logEntries.add(new LogEntry(msg, type));
         if (!shouldShow(type)) return;
@@ -323,7 +325,11 @@ public class AppGUI extends JFrame {
     }
     // exportLog eliminado
     private void appendInfo(String msg) { appendStyled("[INFO] ➡ " + msg, LogType.INFO); }
-    private void appendProgress(String msg) { appendStyled("[PROGRESO] " + msg, LogType.PROGRESS); }
+    private void appendProgress(String msg) {
+        synchronized (logLock) {
+            appendStyled(msg, LogType.PROGRESS);
+        }
+    }
     private void appendSuccess(String msg) { appendStyled("[ÉXITO] ✔ " + msg, LogType.SUCCESS); }
     private void appendError(String msg) { appendStyled("[ERROR] ✖ " + msg, LogType.ERROR); }
     private void appendWarning(String msg) { appendStyled("[ADVERTENCIA] ⚠ " + msg, LogType.WARNING); }
@@ -447,7 +453,7 @@ public class AppGUI extends JFrame {
 
         int n = A.length;
         if (threads > n) {
-            appendInfo("Advertencia: hilos > filas. Ajustando hilos a " + n + " para evitar hilos ociosos.\n");
+            appendInfo("Advertencia: hilos > filas. Ajustando hilos a " + n + " para evitar hilos ociosos.");
             threads = n;
         }
 
@@ -472,8 +478,10 @@ public class AppGUI extends JFrame {
 
             exec.submit(() -> {
                 threadStartTimes.set(threadIndex, System.currentTimeMillis());
+                appendProgress("Hilo #" + (threadIndex + 1) + " INICIA [Filas: " + (from + 1) + "-" + to + "]\n");
                 try {
                     for (int i = from; i < to; i++) {
+                        appendProgress("Hilo #" + (threadIndex + 1) + " fila " + (i + 1) + " procesando...\n");
                         for (int j = 0; j < n; j++) {
                             int sum = 0;
                             for (int k = 0; k < n; k++) sum += A[i][k] * B[k][j];
@@ -498,13 +506,12 @@ public class AppGUI extends JFrame {
                             long start = threadStartTimes.get(threadIndex);
                             long elapsed = System.currentTimeMillis() - start;
                             threadTimeLabels.get(threadIndex).setText(formatMillis(elapsed));
-
-                            appendProgress("[Hilo #" + (threadIndex + 1) + "] fila " + (fi + 1) + " completada\n");
                         });
                     }
                 } catch (Exception ex) {
-                    SwingUtilities.invokeLater(() -> appendError("[Hilo #" + (threadIndex + 1) + "] ERROR: " + ex.getMessage() + "\n"));
+                    SwingUtilities.invokeLater(() -> appendError("❌ Hilo #" + (threadIndex + 1) + " ERROR: " + ex.getMessage()));
                 } finally {
+                    appendProgress("Hilo #" + (threadIndex + 1) + " TERMINA [Filas: " + (from + 1) + "-" + to + "]\n");
                     latch.countDown();
                     SwingUtilities.invokeLater(() -> {
                         // marcar hilo completado si terminó todas sus filas
@@ -523,7 +530,7 @@ public class AppGUI extends JFrame {
         new Thread(() -> {
             try {
                 if (!latch.await(1, TimeUnit.HOURS)) {
-                    SwingUtilities.invokeLater(() -> appendError("Timeout esperando hilos concurrentes\n"));
+                    SwingUtilities.invokeLater(() -> appendError("Timeout esperando hilos concurrentes"));
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
