@@ -1,3 +1,19 @@
+
+/* 
+n es el número de filas de A
+p es el número de columnas de B
+m es el número de columnas de A (que debe coincidir con el número de filas de B para que la multiplicación sea válida).
+Luego, crea una nueva matriz C de tamaño n por p para almacenar el resultado. 
+
+Utiliza tres ciclos anidados: 
+
+    El primero recorre las filas de A
+    El segundo recorre las columnas de B
+    El tercero realiza la suma de los productos correspondientes entre la fila de A y la columna de B.
+
+ Así, cada elemento C[i][j] se calcula sumando A[i][k] * B[k][j] para todos los valores de k. 
+*/
+
 package client;
 
 public class SequentialMultiplier {
