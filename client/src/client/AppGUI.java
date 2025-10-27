@@ -5,18 +5,22 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.table.*;
 import javax.swing.text.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
 import java.util.Random;
 import java.util.concurrent.*;
 import java.util.List;
 import java.util.ArrayList;
 
+import client.ParallelMultiplier.ServerInfo;
+import client.ParallelMultiplier.ProgressCallback;
+
 /**
  * GUI principal para probar la multiplicación de matrices
- * en modo secuencial, concurrente y paralelo.
+ * en modo secuencial, concurrente y paralelo (distribuido).
  *
  * Mejora la visualización de hilos: barras horizontales etiquetadas,
  * tiempos por hilo, consola con colores (JTextPane) y barra global con porcentaje.
+ *
+ * Ahora con control de chunkSize (JSpinner) para ajustar filas por bloque.
  */
 public class AppGUI extends JFrame {
     private int[][] A, B, C;
@@ -25,6 +29,7 @@ public class AppGUI extends JFrame {
     private StyledDocument statusDoc;
     private JProgressBar progressBar;
     private JTextField txtSize, txtThreads;
+    private JSpinner spnChunkSize;
     private JLabel lblTimeSeq, lblTimeConc, lblTimePar;
 
     // Panel para estado de hilos: contendrá sub-paneles por hilo
@@ -62,6 +67,12 @@ public class AppGUI extends JFrame {
         pnlTop.add(new JLabel("Hilos:"));
         txtThreads = new JTextField("4", 5);
         pnlTop.add(txtThreads);
+
+        pnlTop.add(new JLabel("Chunk filas:"));
+        SpinnerNumberModel model = new SpinnerNumberModel(4, 1, 1000, 1); // default 4
+        spnChunkSize = new JSpinner(model);
+        spnChunkSize.setPreferredSize(new Dimension(60, 24));
+        pnlTop.add(spnChunkSize);
 
         JButton btnGen = new JButton("Generar Matrices");
         JButton btnRunSeq = new JButton("Multiplicar Secuencial");
@@ -544,12 +555,15 @@ public class AppGUI extends JFrame {
         }).start();
     }
 
-    /** Ejecuta multiplicaciones paralelo con ExecutorService (local o distribuido) */
+    /** Ejecuta multiplicaciones paralelo distribuido entre servidores RMI.
+     *  Ahora cada servidor puede procesar su segmento internamente con ForkJoin (multiplyBlock).
+     *  Además el cliente puede participar como worker local (includeLocal = true).
+     */
     private void runParallel() {
-        int threads;
+        int totalWorkers;
         try {
-            threads = Integer.parseInt(txtThreads.getText().trim());
-            if (threads <= 0) throw new NumberFormatException();
+            totalWorkers = Integer.parseInt(txtThreads.getText().trim());
+            if (totalWorkers <= 0) throw new NumberFormatException();
         } catch (NumberFormatException ex) {
             JOptionPane.showMessageDialog(this, "Introduce un número válido de hilos (entero > 0).");
             return;
@@ -561,93 +575,135 @@ public class AppGUI extends JFrame {
         }
 
         int n = A.length;
-        if (threads > n) {
-            appendInfo("Advertencia: hilos > filas. Ajustando hilos a " + n + " para evitar hilos ociosos.\n");
-            threads = n;
+
+        // Pedir lista de servidores al usuario
+        String serversStr = JOptionPane.showInputDialog(this,
+                "Introduce lista de servidores (IPs o hostnames) separados por comas.\nEj: 192.168.1.10,192.168.1.11\n(Se usará el servicio RMI 'MatrixService' en puerto 1099)\nDejar vacío y pulsar OK para usar solo procesamiento local.",
+                "192.168.1.10,192.168.1.11");
+        if (serversStr == null) {
+            appendInfo("Ejecución paralelo cancelada por el usuario.\n");
+            return;
         }
+
+        // parsear servidores
+        String[] parts = serversStr.split(",");
+        List<ServerInfo> servers = new ArrayList<>();
+        for (String p : parts) {
+            String host = p.trim();
+            if (host.isEmpty()) continue;
+            // asumimos puerto 1099 y servicio MatrixService
+            servers.add(new ServerInfo(host, 1099, "MatrixService"));
+        }
+
+        // Preguntar al usuario si el cliente también procesará localmente una porción
+        int resp = JOptionPane.showConfirmDialog(this,
+                "¿Deseas que esta máquina cliente procese también una porción local además de los servidores?",
+                "Cliente procesando localmente", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+        boolean includeLocal = (resp == JOptionPane.YES_OPTION);
+
+        // Ajustar totalWorkers máximo a n
+        if (totalWorkers > n) {
+            appendInfo("Advertencia: hilos > filas. Ajustando hilos a " + n + " para evitar hilos ociosos.");
+            totalWorkers = n;
+        }
+
+        if (servers.isEmpty() && !includeLocal) {
+            appendError("No hay servidores especificados y se rechazó procesamiento local. Cancelado.");
+            return;
+        }
+
+        // Obtener chunkSize del spinner
+        int chunkSize = (Integer) spnChunkSize.getValue();
+        if (chunkSize <= 0) chunkSize = 1;
 
         C = new int[n][n];
         progressBar.setMaximum(n);
         progressBar.setValue(0);
         progressBar.setString("0%");
 
-        int rowsPerThread = (n + threads - 1) / threads; // ceil
-        createThreadEntries(threads, rowsPerThread, n);
+        int rowsPerWorker = (n + totalWorkers - 1) / totalWorkers; // ceil
+        createThreadEntries(totalWorkers, rowsPerWorker, n);
 
-        appendInfo("Iniciando ejecución paralelo (ExecutorService local) con " + threads + " hilos...\n");
+        appendInfo("Iniciando ejecución paralelo distribuido con " + totalWorkers + " workers sobre " +
+                servers.size() + " servidores (cliente local: " + includeLocal + ", chunkSize: " + chunkSize + ")...\n");
 
-        ExecutorService exec = Executors.newFixedThreadPool(threads);
-        CountDownLatch latch = new CountDownLatch(threads);
-        long globalStart = System.currentTimeMillis();
+        // Preparar ParallelMultiplier con el chunkSize seleccionado
+        ParallelMultiplier pm = new ParallelMultiplier(chunkSize);
 
-        for (int t = 0; t < threads; t++) {
-            final int row = t; // cada tarea toma una fila a la vez en esta estrategia local
-            final int startRow = t * rowsPerThread;
-            final int endRow = Math.min(n, (t + 1) * rowsPerThread);
-            final int threadIndex = t;
+        long startTime = System.currentTimeMillis();
 
-            exec.submit(() -> {
-                threadStartTimes.set(threadIndex, System.currentTimeMillis());
-                try {
-                    for (int i = startRow; i < endRow; i++) {
-                        for (int j = 0; j < n; j++) {
-                            int sum = 0;
-                            for (int k = 0; k < n; k++) sum += A[i][k] * B[k][j];
-                            C[i][j] = sum;
-                        }
+        ProgressCallback cb = new ProgressCallback() {
+            @Override
+            public void onChunkCompleted(int workerIndex, int endpointIndex, int rowsCompletedForWorker,
+                                         int rowsTotalForWorker, int globalCompleted, int globalTotal) {
+                SwingUtilities.invokeLater(() -> {
+                    // actualizar barra global
+                    progressBar.setValue(globalCompleted);
+                    int percent = (int) (100.0 * progressBar.getValue() / progressBar.getMaximum());
+                    progressBar.setString(percent + "%");
 
-                        final int fi = i;
-                        SwingUtilities.invokeLater(() -> {
-                            // actualizar barra global
-                            progressBar.setValue(progressBar.getValue() + 1);
-                            int percent = (int) (100.0 * progressBar.getValue() / progressBar.getMaximum());
-                            progressBar.setString(percent + "%");
-
-                            // actualizar barra del hilo
-                            JProgressBar pb = threadBars.get(threadIndex);
-                            int newVal = pb.getValue() + 1;
-                            pb.setValue(newVal);
-                            int totalForThread = threadTotalRows.get(threadIndex);
-                            pb.setString(newVal + "/" + totalForThread);
-
-                            // actualizar tiempo transcurrido del hilo
-                            long start = threadStartTimes.get(threadIndex);
-                            long elapsed = System.currentTimeMillis() - start;
-                            threadTimeLabels.get(threadIndex).setText(formatMillis(elapsed));
-
-                            appendProgress("[Paralelo Hilo #" + (threadIndex + 1) + "] fila " + (fi + 1) + " completada\n");
-                        });
+                    // actualizar barra worker
+                    if (workerIndex < threadBars.size()) {
+                        JProgressBar pb = threadBars.get(workerIndex);
+                        int newVal = Math.min(pb.getMaximum(), rowsCompletedForWorker);
+                        pb.setValue(newVal);
+                        pb.setString(newVal + "/" + threadTotalRows.get(workerIndex));
                     }
-                } catch (Exception ex) {
-                    SwingUtilities.invokeLater(() -> appendError("[Paralelo Hilo #" + (threadIndex + 1) + "] ERROR: " + ex.getMessage() + "\n"));
-                } finally {
-                    latch.countDown();
-                    SwingUtilities.invokeLater(() -> {
-                        JProgressBar pb = threadBars.get(threadIndex);
-                        int totalForThread = threadTotalRows.get(threadIndex);
-                        if (pb.getValue() >= totalForThread) {
-                            pb.setString("Completado");
-                        }
-                    });
-                }
-            });
-        }
 
-        exec.shutdown();
+                    // actualizar tiempo estimado del worker (simple)
+                    if (workerIndex < threadTimeLabels.size()) {
+                        if (threadStartTimes.get(workerIndex) == 0L) threadStartTimes.set(workerIndex, System.currentTimeMillis());
+                        long elapsed = System.currentTimeMillis() - threadStartTimes.get(workerIndex);
+                        threadTimeLabels.get(workerIndex).setText(formatMillis(elapsed));
+                    }
+
+                    // Mostrar log identificando endpoint (si endpointIndex >= servers.size() es local)
+                    String srvLabel = (endpointIndex < servers.size()) ? ("srv " + (endpointIndex+1)) : "cliente(local)";
+                    appendProgress("[Paralelo] Worker#" + (workerIndex + 1) + " (" + srvLabel + ") filas " +
+                            rowsCompletedForWorker + "/" + rowsTotalForWorker + "  -> global " + globalCompleted + "/" + globalTotal + "\n");
+
+                    display(tblC, C);
+                });
+            }
+
+            @Override
+            public void onWorkerStarted(int workerIndex, int endpointIndex) {
+                SwingUtilities.invokeLater(() -> {
+                    String srvLabel = (endpointIndex < servers.size()) ? ("srv " + (endpointIndex+1)) : "cliente(local)";
+                    appendProgress("[Paralelo] Worker#" + (workerIndex+1) + " STARTED on " + srvLabel + "\n");
+                    if (workerIndex < threadStartTimes.size()) threadStartTimes.set(workerIndex, System.currentTimeMillis());
+                });
+            }
+
+            @Override
+            public void onWorkerFinished(int workerIndex, int endpointIndex) {
+                SwingUtilities.invokeLater(() -> {
+                    String srvLabel = (endpointIndex < servers.size()) ? ("srv " + (endpointIndex+1)) : "cliente(local)";
+                    appendProgress("[Paralelo] Worker#" + (workerIndex+1) + " FINISHED (" + srvLabel + ")\n");
+                    if (workerIndex < threadBars.size()) {
+                        JProgressBar pb = threadBars.get(workerIndex);
+                        pb.setString("Completado (" + srvLabel + ")");
+                    }
+                });
+            }
+        };
+
+        // Ejecutar en background
         new Thread(() -> {
             try {
-                if (!latch.await(1, TimeUnit.HOURS)) {
-                    SwingUtilities.invokeLater(() -> appendError("Timeout esperando hilos paralelos\n"));
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+                // serverThreadCount = 0 => deja que cada servidor elija su #threads (p.ej. cores)
+                int serverThreadCount = 0;
+                int[][] result = pm.multiplyDistributed(A, B, servers, totalWorkers, cb, includeLocal, serverThreadCount);
+                long endTime = System.currentTimeMillis();
+                SwingUtilities.invokeLater(() -> {
+                    lblTimePar.setText("Paralelo: " + (endTime - startTime) + " ms");
+                    display(tblC, result);
+                    appendSuccess("Ejecución paralelo distribuido completada en " + (endTime - startTime) + " ms\n");
+                });
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                SwingUtilities.invokeLater(() -> appendError("Error en ejecución paralelo: " + ex.getMessage() + "\n"));
             }
-            long globalEnd = System.currentTimeMillis();
-            SwingUtilities.invokeLater(() -> {
-                lblTimePar.setText("Paralelo: " + (globalEnd - globalStart) + " ms");
-                display(tblC, C);
-                appendSuccess("Ejecución paralelo completada en " + (globalEnd - globalStart) + " ms\n");
-            });
         }).start();
     }
 
