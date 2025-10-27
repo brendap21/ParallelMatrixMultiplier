@@ -621,11 +621,14 @@ public class AppGUI extends JFrame {
         progressBar.setValue(0);
         progressBar.setString("0%");
 
-        int rowsPerWorker = (n + totalWorkers - 1) / totalWorkers; // ceil
-        createThreadEntries(totalWorkers, rowsPerWorker, n);
+    int rowsPerWorker = (n + totalWorkers - 1) / totalWorkers; // ceil
+    createThreadEntries(totalWorkers, rowsPerWorker, n);
 
-        appendInfo("Iniciando ejecución paralelo distribuido con " + totalWorkers + " workers sobre " +
-                servers.size() + " servidores (cliente local: " + includeLocal + ", chunkSize: " + chunkSize + ")...\n");
+    // Make a final copy of totalWorkers to allow capture by inner classes / lambdas
+    final int finalTotalWorkers = totalWorkers;
+
+    appendInfo("Iniciando ejecución paralelo distribuido con " + finalTotalWorkers + " workers sobre " +
+        servers.size() + " servidores (cliente local: " + includeLocal + ", chunkSize: " + chunkSize + ")...\n");
 
         // Preparar ParallelMultiplier con el chunkSize seleccionado
         ParallelMultiplier pm = new ParallelMultiplier(chunkSize);
@@ -693,7 +696,7 @@ public class AppGUI extends JFrame {
             try {
                 // serverThreadCount = 0 => deja que cada servidor elija su #threads (p.ej. cores)
                 int serverThreadCount = 0;
-                int[][] result = pm.multiplyDistributed(A, B, servers, totalWorkers, cb, includeLocal, serverThreadCount);
+                int[][] result = pm.multiplyDistributed(A, B, servers, finalTotalWorkers, cb, includeLocal, serverThreadCount);
                 long endTime = System.currentTimeMillis();
                 SwingUtilities.invokeLater(() -> {
                     lblTimePar.setText("Paralelo: " + (endTime - startTime) + " ms");
