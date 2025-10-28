@@ -99,10 +99,12 @@ public class ParallelMultiplier {
 
         // NEW: si serverThreadCount no fue especificado (<=0) y hay múltiples endpoints,
         // elegir un valor conservador para evitar oversubscription en servidores remotos.
-        int effectiveServerThreadCount = serverThreadCount;
+        final int effectiveServerThreadCount;
         if (serverThreadCount <= 0 && endpointCount > 1) {
             // Forzar 1 hilo por servidor por defecto cuando hay varios endpoints.
             effectiveServerThreadCount = 1;
+        } else {
+            effectiveServerThreadCount = serverThreadCount;
         }
 
         // NEW: crear un ConcurrentMultiplier reutilizable para procesamiento local (si hay)
