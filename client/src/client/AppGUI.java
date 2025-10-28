@@ -31,6 +31,8 @@ public class AppGUI extends JFrame {
     private JTextField txtSize, txtThreads;
     private JSpinner spnChunkSize;
     private JLabel lblTimeSeq, lblTimeConc, lblTimePar;
+    // NUEVO: campo para hilos del servidor
+    private JTextField txtServerThreads;
 
     // Panel para estado de hilos: contendrá sub-paneles por hilo
     private JPanel threadStatusPanel;
@@ -73,6 +75,11 @@ public class AppGUI extends JFrame {
         spnChunkSize = new JSpinner(model);
         spnChunkSize.setPreferredSize(new Dimension(60, 24));
         pnlTop.add(spnChunkSize);
+
+        // NUEVO: campo para hilos del servidor
+        pnlTop.add(new JLabel("Hilos servidor:"));
+        txtServerThreads = new JTextField("0", 4); // 0 = auto
+        pnlTop.add(txtServerThreads);
 
         JButton btnGen = new JButton("Generar Matrices");
         JButton btnRunSeq = new JButton("Multiplicar Secuencial");
@@ -578,7 +585,7 @@ public class AppGUI extends JFrame {
 
         // Pedir lista de servidores al usuario
         String serversStr = JOptionPane.showInputDialog(this,
-                "Introduce lista de servidores (IPs o hostnames) separados por comas.\nEj: 192.168.1.10,192.168.1.11\n(Se usará el servicio RMI 'MatrixService' en puerto 1099)\nDejar vacío y pulsar OK para usar solo procesamiento local.",
+                "Introduce lista de servidores (IPs o hostnames) separados por comas.\nEj: 192.168.1.10,192.168.1.11\n(Se usará el servicio RMI 'MatrixService' en puerto 1099)\nDejar vacío y pulsar OK para usar solo procesamiento local.\n\nSUGERENCIA: Para matrices grandes, usa chunk >= 100 para mejor rendimiento distribuido.",
                 "192.168.1.10,192.168.1.11");
         if (serversStr == null) {
             appendInfo("Ejecución paralelo cancelada por el usuario.\n");
@@ -616,19 +623,39 @@ public class AppGUI extends JFrame {
         int chunkSize = (Integer) spnChunkSize.getValue();
         if (chunkSize <= 0) chunkSize = 1;
 
+        // NUEVO: obtener hilos del servidor
+        int serverThreadCount = 0;
+        try {
+            serverThreadCount = Integer.parseInt(txtServerThreads.getText().trim());
+        } catch (Exception ex) {
+            serverThreadCount = 0;
+        }
+
+        // Advertencia si solo hay un servidor y el cliente es la misma IP
+        if (servers.size() == 1 && includeLocal) {
+            String localIp = "127.0.0.1";
+            try {
+                localIp = java.net.InetAddress.getLocalHost().getHostAddress();
+            } catch (Exception ex) {}
+            if (servers.get(0).host.equals("localhost") || servers.get(0).host.equals(localIp)) {
+                appendWarning("Estás usando solo un servidor y el cliente en la misma máquina. No habrá ganancia real de paralelismo distribuido.\n");
+            }
+        }
+
         C = new int[n][n];
         progressBar.setMaximum(n);
         progressBar.setValue(0);
         progressBar.setString("0%");
 
-    int rowsPerWorker = (n + totalWorkers - 1) / totalWorkers; // ceil
-    createThreadEntries(totalWorkers, rowsPerWorker, n);
+        int rowsPerWorker = (n + totalWorkers - 1) / totalWorkers; // ceil
+        createThreadEntries(totalWorkers, rowsPerWorker, n);
 
-    // Make a final copy of totalWorkers to allow capture by inner classes / lambdas
-    final int finalTotalWorkers = totalWorkers;
+        // Make a final copy of totalWorkers to allow capture by inner classes / lambdas
+        final int finalTotalWorkers = totalWorkers;
 
-    appendInfo("Iniciando ejecución paralelo distribuido con " + finalTotalWorkers + " workers sobre " +
-        servers.size() + " servidores (cliente local: " + includeLocal + ", chunkSize: " + chunkSize + ")...\n");
+        appendInfo("Iniciando ejecución paralelo distribuido con " + finalTotalWorkers + " workers sobre " +
+            servers.size() + " servidores (cliente local: " + includeLocal + ", chunkSize: " + chunkSize +
+            ", hilos servidor: " + serverThreadCount + ")...\n");
 
         // Preparar ParallelMultiplier con el chunkSize seleccionado
         ParallelMultiplier pm = new ParallelMultiplier(chunkSize);
@@ -694,8 +721,6 @@ public class AppGUI extends JFrame {
         // Ejecutar en background
         new Thread(() -> {
             try {
-                // serverThreadCount = 0 => deja que cada servidor elija su #threads (p.ej. cores)
-                int serverThreadCount = 0;
                 int[][] result = pm.multiplyDistributed(A, B, servers, finalTotalWorkers, cb, includeLocal, serverThreadCount);
                 long endTime = System.currentTimeMillis();
                 SwingUtilities.invokeLater(() -> {

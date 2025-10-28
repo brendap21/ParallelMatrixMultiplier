@@ -130,7 +130,7 @@ public class ParallelMultiplier {
         final int[] globalDone = {0};
 
         // SUGERENCIA: Forzar chunk grande para RMI si hay pocos endpoints
-        final int minRemoteChunk = 200; // puedes ajustar a 100, 200, 500 según pruebas
+        final int minRemoteChunk = 200; // antes 200, puedes ajustar a 100, 200, 500 según pruebas
 
         for (int w = 0; w < totalAssignedWorkers; w++) {
             final int workerIndex = w;
