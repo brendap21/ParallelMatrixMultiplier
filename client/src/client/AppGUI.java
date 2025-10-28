@@ -787,15 +787,3 @@ public class AppGUI extends JFrame {
 		SwingUtilities.invokeLater(() -> new AppGUI().setVisible(true));
 	}
 }
-        pnl.add(tableScroll, BorderLayout.CENTER);
-        JPanel pnlBtn = new JPanel();
-        pnlBtn.add(btnView);
-        pnl.add(pnlBtn, BorderLayout.SOUTH);
-        pnl.setMaximumSize(new Dimension(420, Integer.MAX_VALUE));
-        return pnl;
-    }
-
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> new AppGUI().setVisible(true));
-    }
-}
