@@ -90,16 +90,36 @@ public class ParallelMultiplier {
         int rowsPerWorker = (n + totalWorkers - 1) / totalWorkers; // ceil
         int totalAssignedWorkers = totalWorkers;
 
+        // NEW: limitar concurrencia por endpoint (evita múltiples llamadas RMI simultáneas al mismo servidor)
+        final List<Semaphore> endpointSemaphores = new ArrayList<>(endpointCount);
+        for (int i = 0; i < endpointCount; i++) {
+            // permitimos 1 llamada concurrente por endpoint por defecto (evita sobrecarga)
+            endpointSemaphores.add(new Semaphore(1));
+        }
+
+        // NEW: si serverThreadCount no fue especificado (<=0) y hay múltiples endpoints,
+        // elegir un valor conservador para evitar oversubscription en servidores remotos.
+        int effectiveServerThreadCount = serverThreadCount;
+        if (serverThreadCount <= 0 && endpointCount > 1) {
+            // Forzar 1 hilo por servidor por defecto cuando hay varios endpoints.
+            effectiveServerThreadCount = 1;
+        }
+
         // NEW: crear un ConcurrentMultiplier reutilizable para procesamiento local (si hay)
         final ConcurrentMultiplier localConcurrent;
         if (hasLocal) {
-            int useLocalThreads = (serverThreadCount > 0) ? serverThreadCount : Runtime.getRuntime().availableProcessors();
-            localConcurrent = new ConcurrentMultiplier(useLocalThreads);
+            // repartir cores entre endpoints para evitar usar todos en el cliente local si hay múltiples endpoints
+            int availableCores = Runtime.getRuntime().availableProcessors();
+            int coresPerEndpoint = Math.max(1, availableCores / Math.max(1, endpointCount));
+            localConcurrent = new ConcurrentMultiplier(coresPerEndpoint);
         } else {
             localConcurrent = null;
         }
 
-        ExecutorService exec = Executors.newFixedThreadPool(totalAssignedWorkers);
+        // NEW: limitar tamaño del pool del cliente para no lanzar demasiados workers paralelos
+        int maxParallelRequestsPerEndpoint = 2; // factor empírico; evita generar más hilos que endpoints * factor
+        int execPoolSize = Math.min(totalAssignedWorkers, Math.max(1, endpointCount * maxParallelRequestsPerEndpoint));
+        ExecutorService exec = Executors.newFixedThreadPool(execPoolSize);
         CountDownLatch finishLatch = new CountDownLatch(totalAssignedWorkers);
 
         final int[][] C = new int[n][B[0].length];
@@ -146,7 +166,8 @@ public class ParallelMultiplier {
                             for (int i = 0; i < rows; i++) {
                                 System.arraycopy(A[chunkStart + i], 0, A_block[i], 0, A[0].length);
                             }
-                            int localThreads = (serverThreadCount > 0) ? serverThreadCount : Runtime.getRuntime().availableProcessors();
+                            // ya calculamos coresPerEndpoint al crear localConcurrent
+                            int localThreads = (effectiveServerThreadCount > 0) ? effectiveServerThreadCount : Runtime.getRuntime().availableProcessors();
                             int[][] blockResult = localConcurrent.multiplyBlock(A_block, B, localThreads);
                             for (int i = 0; i < blockResult.length; i++) {
                                 int destRow = chunkStart + i;
@@ -176,14 +197,21 @@ public class ParallelMultiplier {
                             }
 
                             int[][] chunkResult;
+                            // Limitamos concurrencia al endpoint (evita saturarlo con múltiples requests simultáneas)
+                            Semaphore sem = endpointSemaphores.get(endpointIndex);
+                            sem.acquireUninterruptibly();
                             try {
-                                chunkResult = stub.multiplyBlock(A_block, B, chunkStart, serverThreadCount);
-                            } catch (Exception e) {
                                 try {
-                                    chunkResult = stub.multiplyBlock(A_block, B, chunkStart, serverThreadCount);
-                                } catch (Exception e2) {
-                                    throw new RuntimeException("Error RMI con servidor " + endpointIndex + " : " + e2.getMessage(), e2);
+                                    chunkResult = stub.multiplyBlock(A_block, B, chunkStart, effectiveServerThreadCount);
+                                } catch (Exception e) {
+                                    try {
+                                        chunkResult = stub.multiplyBlock(A_block, B, chunkStart, effectiveServerThreadCount);
+                                    } catch (Exception e2) {
+                                        throw new RuntimeException("Error RMI con servidor " + endpointIndex + " : " + e2.getMessage(), e2);
+                                    }
                                 }
+                            } finally {
+                                sem.release();
                             }
 
                             int rowsCopied = chunkEnd - chunkStart;
