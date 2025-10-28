@@ -772,20 +772,20 @@ public class AppGUI extends JFrame {
     }
 
     private JPanel wrapTitled(String title, JScrollPane tableScroll, JButton btnView) {
-        JPanel pnl = new JPanel();
-        pnl.setLayout(new BorderLayout(6,6));
-        pnl.setBorder(BorderFactory.createTitledBorder(title));
-        pnl.add(tableScroll, BorderLayout.CENTER);
-        JPanel pnlBtn = new JPanel();
-        pnlBtn.add(btnView);
-        pnl.add(pnlBtn, BorderLayout.SOUTH);
-        pnl.setMaximumSize(new Dimension(420, Integer.MAX_VALUE));
-        return pnl;
-    }
+		JPanel pnl = new JPanel();
+		pnl.setLayout(new BorderLayout(6,6));
+		pnl.setBorder(BorderFactory.createTitledBorder(title));
+		pnl.add(tableScroll, BorderLayout.CENTER);
+		JPanel pnlBtn = new JPanel();
+		pnlBtn.add(btnView);
+		pnl.add(pnlBtn, BorderLayout.SOUTH);
+		pnl.setMaximumSize(new Dimension(420, Integer.MAX_VALUE));
+		return pnl;
+	}
 
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> new AppGUI().setVisible(true));
-    }
+	public static void main(String[] args) {
+		SwingUtilities.invokeLater(() -> new AppGUI().setVisible(true));
+	}
 }
         pnl.add(tableScroll, BorderLayout.CENTER);
         JPanel pnlBtn = new JPanel();
