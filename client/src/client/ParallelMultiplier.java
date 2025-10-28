@@ -129,6 +129,9 @@ public class ParallelMultiplier {
         final Object globalLock = new Object();
         final int[] globalDone = {0};
 
+        // SUGERENCIA: Forzar chunk grande para RMI si hay pocos endpoints
+        final int minRemoteChunk = 200; // puedes ajustar a 100, 200, 500 según pruebas
+
         for (int w = 0; w < totalAssignedWorkers; w++) {
             final int workerIndex = w;
             final int startRow = workerIndex * rowsPerWorker;
@@ -153,9 +156,8 @@ public class ParallelMultiplier {
                     // ADAPTIVE CHUNK: para endpoints remotos usar bloques más grandes (menos RMI)
                     int effectiveChunk = chunkSize;
                     if (stub != null) {
-                        // enviar al menos chunkSize pero escalado hasta filasPorWorker (y tope práctico)
-                        int cap = Math.min(256, rowsPerWorker);
-                        effectiveChunk = Math.max(chunkSize, cap);
+                        // Forzar chunk grande para RMI
+                        effectiveChunk = Math.max(chunkSize, minRemoteChunk);
                     }
 
                     if (stub == null) {
