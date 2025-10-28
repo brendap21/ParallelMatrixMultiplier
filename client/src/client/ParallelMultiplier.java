@@ -77,15 +77,26 @@ public class ParallelMultiplier {
         int n = A.length;
         if (totalWorkers <= 0) totalWorkers = Math.min(n, endpointCount);
 
-        int rowsPerWorker = (n + totalWorkers - 1) / totalWorkers; // ceil
-        int totalAssignedWorkers = totalWorkers;
+        // Compute effective server thread count and a sensible parallelism per endpoint.
+        final int effectiveServerThreadCount = (serverThreadCount <= 0) ? 0 : serverThreadCount;
+        // default parallel requests per endpoint (controls how many simultaneous RMI calls we allow)
+        int maxParallelRequestsPerEndpoint = 2;
+        if (effectiveServerThreadCount > 0) {
+            // allow a few concurrent requests without wildly oversubscribing the server
+            maxParallelRequestsPerEndpoint = Math.max(1, Math.min(4, effectiveServerThreadCount / 2));
+        }
+
+        // Limit the total number of worker tasks so we don't cause excessive repeated serialization of B.
+        int totalAssignedWorkers = Math.min(totalWorkers, endpointCount * maxParallelRequestsPerEndpoint);
+        if (totalAssignedWorkers <= 0) totalAssignedWorkers = 1;
+
+        int rowsPerWorker = (n + totalAssignedWorkers - 1) / totalAssignedWorkers; // ceil
 
         final List<Semaphore> endpointSemaphores = new ArrayList<>(endpointCount);
         for (int i = 0; i < endpointCount; i++) {
-            endpointSemaphores.add(new Semaphore(1));
+            // allow up to maxParallelRequestsPerEndpoint simultaneous requests to each endpoint
+            endpointSemaphores.add(new Semaphore(maxParallelRequestsPerEndpoint));
         }
-
-        final int effectiveServerThreadCount = (serverThreadCount <= 0) ? 0 : serverThreadCount;
 
         final ConcurrentMultiplier localConcurrent;
         if (hasLocal) {
@@ -96,8 +107,7 @@ public class ParallelMultiplier {
             localConcurrent = null;
         }
 
-        int maxParallelRequestsPerEndpoint = 2;
-        int execPoolSize = Math.min(totalAssignedWorkers, Math.max(1, endpointCount * maxParallelRequestsPerEndpoint));
+    int execPoolSize = Math.min(totalAssignedWorkers, Math.max(1, endpointCount * maxParallelRequestsPerEndpoint));
         ExecutorService exec = Executors.newFixedThreadPool(execPoolSize);
         CountDownLatch finishLatch = new CountDownLatch(totalAssignedWorkers);
 
@@ -168,8 +178,8 @@ public class ParallelMultiplier {
             });
         }
 
-        finishLatch.await(1, TimeUnit.HOURS);
-        exec.shutdownNow();
+    finishLatch.await(1, TimeUnit.HOURS);
+    exec.shutdown();
 
         return C;
     }
