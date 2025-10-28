@@ -594,7 +594,7 @@ public class AppGUI extends JFrame {
 
         // parsear servidores
         String[] parts = serversStr.split(",");
-        List<ServerInfo> servers = new ArrayList<>();
+        final List<ServerInfo> servers = new ArrayList<>();
         for (String p : parts) {
             String host = p.trim();
             if (host.isEmpty()) continue;
@@ -606,7 +606,7 @@ public class AppGUI extends JFrame {
         int resp = JOptionPane.showConfirmDialog(this,
                 "¿Deseas que esta máquina cliente procese también una porción local además de los servidores?",
                 "Cliente procesando localmente", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
-        boolean includeLocal = (resp == JOptionPane.YES_OPTION);
+        final boolean includeLocal = (resp == JOptionPane.YES_OPTION);
 
         // Ajustar totalWorkers máximo a n
         if (totalWorkers > n) {
@@ -624,12 +624,14 @@ public class AppGUI extends JFrame {
         if (chunkSize <= 0) chunkSize = 1;
 
         // NUEVO: obtener hilos del servidor
-        int serverThreadCount = 0;
+        final int serverThreadCount;
+        int tmpServerThreadCount = 0;
         try {
-            serverThreadCount = Integer.parseInt(txtServerThreads.getText().trim());
+            tmpServerThreadCount = Integer.parseInt(txtServerThreads.getText().trim());
         } catch (Exception ex) {
-            serverThreadCount = 0;
+            tmpServerThreadCount = 0;
         }
+        serverThreadCount = tmpServerThreadCount;
 
         // Advertencia si solo hay un servidor y el cliente es la misma IP
         if (servers.size() == 1 && includeLocal) {
