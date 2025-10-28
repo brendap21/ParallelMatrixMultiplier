@@ -38,20 +38,12 @@ public class ParallelMultiplier {
         void onWorkerFinished(int workerIndex, int endpointIndex);
     }
 
-    private final int chunkSize; // filas por sub-llamada (1 = máximo detalle). Default 4.
-    public ParallelMultiplier() { this(4); }
-    public ParallelMultiplier(int chunkSize) { this.chunkSize = Math.max(1, chunkSize); }
+    // Elimina chunkSize
+    public ParallelMultiplier() {}
 
     /**
      * Multiplica A x B de forma distribuida entre servidores y posible procesamiento local.
-     *
-     * - servers: lista de servidores remotos disponibles (puede ser vacía)
-     * - totalWorkers: número total de workers lógicos (barras que verá el usuario)
-     * - callback: para actualizaciones de progreso
-     * - includeLocal: si true, el cliente toma una porción local además de los servidores remotos
-     * - serverThreadCount: número de hilos que solicitamos al servidor; si <=0 cada servidor decide (p.ej. #cores)
-     *
-     * Retorna la matriz resultante C.
+     * Ahora cada worker procesa su bloque completo de filas en una sola llamada.
      */
     public int[][] multiplyDistributed(int[][] A, int[][] B,
                                        List<ServerInfo> servers,
@@ -75,7 +67,6 @@ public class ParallelMultiplier {
 
         final boolean hasLocal = includeLocal;
         if (hasLocal) {
-            // indicamos con null stub que el último endpoint corresponde al cliente local
             stubs.add(null);
             endpointsInfo.add(null);
         }
@@ -83,34 +74,21 @@ public class ParallelMultiplier {
         final int endpointCount = stubs.size();
         if (endpointCount == 0) throw new IllegalStateException("No hay endpoints disponibles.");
 
-        // Ajustar totalWorkers: no puede ser > n
         int n = A.length;
         if (totalWorkers <= 0) totalWorkers = Math.min(n, endpointCount);
 
         int rowsPerWorker = (n + totalWorkers - 1) / totalWorkers; // ceil
         int totalAssignedWorkers = totalWorkers;
 
-        // NEW: limitar concurrencia por endpoint (evita múltiples llamadas RMI simultáneas al mismo servidor)
         final List<Semaphore> endpointSemaphores = new ArrayList<>(endpointCount);
         for (int i = 0; i < endpointCount; i++) {
-            // permitimos 1 llamada concurrente por endpoint por defecto (evita sobrecarga)
             endpointSemaphores.add(new Semaphore(1));
         }
 
-        // NEW: si serverThreadCount no fue especificado (<=0) y hay múltiples endpoints,
-        // elegir un valor conservador para evitar oversubscription en servidores remotos.
-        final int effectiveServerThreadCount;
-        if (serverThreadCount <= 0 && endpointCount > 1) {
-            // Forzar 1 hilo por servidor por defecto cuando hay varios endpoints.
-            effectiveServerThreadCount = 1;
-        } else {
-            effectiveServerThreadCount = serverThreadCount;
-        }
+        final int effectiveServerThreadCount = (serverThreadCount <= 0) ? 0 : serverThreadCount;
 
-        // NEW: crear un ConcurrentMultiplier reutilizable para procesamiento local (si hay)
         final ConcurrentMultiplier localConcurrent;
         if (hasLocal) {
-            // repartir cores entre endpoints para evitar usar todos en el cliente local si hay múltiples endpoints
             int availableCores = Runtime.getRuntime().availableProcessors();
             int coresPerEndpoint = Math.max(1, availableCores / Math.max(1, endpointCount));
             localConcurrent = new ConcurrentMultiplier(coresPerEndpoint);
@@ -118,8 +96,7 @@ public class ParallelMultiplier {
             localConcurrent = null;
         }
 
-        // NEW: limitar tamaño del pool del cliente para no lanzar demasiados workers paralelos
-        int maxParallelRequestsPerEndpoint = 2; // factor empírico; evita generar más hilos que endpoints * factor
+        int maxParallelRequestsPerEndpoint = 2;
         int execPoolSize = Math.min(totalAssignedWorkers, Math.max(1, endpointCount * maxParallelRequestsPerEndpoint));
         ExecutorService exec = Executors.newFixedThreadPool(execPoolSize);
         CountDownLatch finishLatch = new CountDownLatch(totalAssignedWorkers);
@@ -129,16 +106,12 @@ public class ParallelMultiplier {
         final Object globalLock = new Object();
         final int[] globalDone = {0};
 
-        // SUGERENCIA: Forzar chunk grande para RMI si hay pocos endpoints
-        final int minRemoteChunk = 200; // antes 200, puedes ajustar a 100, 200, 500 según pruebas
-
         for (int w = 0; w < totalAssignedWorkers; w++) {
             final int workerIndex = w;
             final int startRow = workerIndex * rowsPerWorker;
             final int endRow = Math.min(n, (workerIndex + 1) * rowsPerWorker);
             final int totalForWorker = Math.max(0, endRow - startRow);
 
-            // Asignar endpoint en round-robin (entre endpoints disponibles)
             final int endpointIndex = workerIndex % endpointCount;
             final MatrixMultiplier stub = stubs.get(endpointIndex); // null => local
             final ServerInfo endpointInfo = endpointsInfo.get(endpointIndex);
@@ -153,27 +126,54 @@ public class ParallelMultiplier {
 
                     if (callback != null) callback.onWorkerStarted(workerIndex, endpointIndex);
 
-                    // ADAPTIVE CHUNK: para endpoints remotos usar bloques más grandes (menos RMI)
-                    int effectiveChunk = chunkSize;
-                    if (stub != null) {
-                        // Forzar chunk grande para RMI
-                        effectiveChunk = Math.max(chunkSize, minRemoteChunk);
+                    int[][] A_block = new int[totalForWorker][A[0].length];
+                    for (int i = 0; i < totalForWorker; i++) {
+                        System.arraycopy(A[startRow + i], 0, A_block[i], 0, A[0].length);
                     }
 
+                    int[][] blockResult;
                     if (stub == null) {
-                        // Procesamiento LOCAL (cliente) usando ConcurrentMultiplier reutilizable
-                        for (int r = startRow; r < endRow; r += effectiveChunk) {
-                            int chunkStart = r;
-                            int chunkEnd = Math.min(endRow, r + effectiveChunk);
-                            int rows = chunkEnd - chunkStart;
-                            int[][] A_block = new int[rows][A[0].length];
-                            for (int i = 0; i < rows; i++) {
-                                System.arraycopy(A[chunkStart + i], 0, A_block[i], 0, A[0].length);
-                            }
-                            // ya calculamos coresPerEndpoint al crear localConcurrent
-                            int localThreads = (effectiveServerThreadCount > 0) ? effectiveServerThreadCount : Runtime.getRuntime().availableProcessors();
-                            int[][] blockResult = localConcurrent.multiplyBlock(A_block, B, localThreads);
-                            for (int i = 0; i < blockResult.length; i++) {
+                        int localThreads = (effectiveServerThreadCount > 0) ? effectiveServerThreadCount : Runtime.getRuntime().availableProcessors();
+                        blockResult = localConcurrent.multiplyBlock(A_block, B, localThreads);
+                    } else {
+                        Semaphore sem = endpointSemaphores.get(endpointIndex);
+                        sem.acquireUninterruptibly();
+                        try {
+                            blockResult = stub.multiplyBlock(A_block, B, startRow, effectiveServerThreadCount);
+                        } finally {
+                            sem.release();
+                        }
+                    }
+
+                    for (int i = 0; i < blockResult.length; i++) {
+                        int destRow = startRow + i;
+                        System.arraycopy(blockResult[i], 0, C[destRow], 0, blockResult[i].length);
+                    }
+
+                    int globalNow;
+                    synchronized (globalLock) {
+                        globalDone[0] += totalForWorker;
+                        globalNow = globalDone[0];
+                    }
+                    if (callback != null) callback.onChunkCompleted(workerIndex, endpointIndex,
+                            totalForWorker, totalForWorker, globalNow, n);
+
+                    if (callback != null) callback.onWorkerFinished(workerIndex, endpointIndex);
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    if (callback != null) callback.onWorkerFinished(workerIndex, endpointIndex);
+                } finally {
+                    finishLatch.countDown();
+                }
+            });
+        }
+
+        finishLatch.await(1, TimeUnit.HOURS);
+        exec.shutdownNow();
+
+        return C;
+    }
+}
                                 int destRow = chunkStart + i;
                                 System.arraycopy(blockResult[i], 0, C[destRow], 0, blockResult[i].length);
                             }

@@ -29,7 +29,6 @@ public class AppGUI extends JFrame {
     private StyledDocument statusDoc;
     private JProgressBar progressBar;
     private JTextField txtSize, txtThreads;
-    private JSpinner spnChunkSize;
     private JLabel lblTimeSeq, lblTimeConc, lblTimePar;
     // NUEVO: campo para hilos del servidor
     private JTextField txtServerThreads;
@@ -70,13 +69,6 @@ public class AppGUI extends JFrame {
         txtThreads = new JTextField("4", 5);
         pnlTop.add(txtThreads);
 
-        pnlTop.add(new JLabel("Chunk filas:"));
-        SpinnerNumberModel model = new SpinnerNumberModel(4, 1, 1000, 1); // default 4
-        spnChunkSize = new JSpinner(model);
-        spnChunkSize.setPreferredSize(new Dimension(60, 24));
-        pnlTop.add(spnChunkSize);
-
-        // NUEVO: campo para hilos del servidor
         pnlTop.add(new JLabel("Hilos servidor:"));
         txtServerThreads = new JTextField("0", 4); // 0 = auto
         pnlTop.add(txtServerThreads);
@@ -619,10 +611,6 @@ public class AppGUI extends JFrame {
             return;
         }
 
-        // Obtener chunkSize del spinner
-        int chunkSize = (Integer) spnChunkSize.getValue();
-        if (chunkSize <= 0) chunkSize = 1;
-
         // NUEVO: obtener hilos del servidor
         final int serverThreadCount;
         int tmpServerThreadCount = 0;
@@ -656,11 +644,11 @@ public class AppGUI extends JFrame {
         final int finalTotalWorkers = totalWorkers;
 
         appendInfo("Iniciando ejecución paralelo distribuido con " + finalTotalWorkers + " workers sobre " +
-            servers.size() + " servidores (cliente local: " + includeLocal + ", chunkSize: " + chunkSize +
+            servers.size() + " servidores (cliente local: " + includeLocal +
             ", hilos servidor: " + serverThreadCount + ")...\n");
 
-        // Preparar ParallelMultiplier con el chunkSize seleccionado
-        ParallelMultiplier pm = new ParallelMultiplier(chunkSize);
+        // ParallelMultiplier ya no recibe chunkSize
+        ParallelMultiplier pm = new ParallelMultiplier();
 
         long startTime = System.currentTimeMillis();
 
@@ -787,6 +775,18 @@ public class AppGUI extends JFrame {
         JPanel pnl = new JPanel();
         pnl.setLayout(new BorderLayout(6,6));
         pnl.setBorder(BorderFactory.createTitledBorder(title));
+        pnl.add(tableScroll, BorderLayout.CENTER);
+        JPanel pnlBtn = new JPanel();
+        pnlBtn.add(btnView);
+        pnl.add(pnlBtn, BorderLayout.SOUTH);
+        pnl.setMaximumSize(new Dimension(420, Integer.MAX_VALUE));
+        return pnl;
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> new AppGUI().setVisible(true));
+    }
+}
         pnl.add(tableScroll, BorderLayout.CENTER);
         JPanel pnlBtn = new JPanel();
         pnlBtn.add(btnView);
