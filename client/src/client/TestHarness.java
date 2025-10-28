@@ -35,9 +35,12 @@ public class TestHarness {
         System.out.printf("Concurrente: %d ms\n", (t1 - t0) / 1_000_000);
 
     // Distributed: try to contact local server (two variants)
+    String serverIp = "127.0.0.1";
+    if (args.length > 0 && args[0] != null && !args[0].isEmpty()) serverIp = args[0];
+
     ParallelMultiplier pm = new ParallelMultiplier();
     List<ParallelMultiplier.ServerInfo> servers = new ArrayList<>();
-    servers.add(new ParallelMultiplier.ServerInfo("127.0.0.1", 1099, "MatrixService"));
+    servers.add(new ParallelMultiplier.ServerInfo(serverIp, 1099, "MatrixService"));
 
     System.out.println("Waiting 1s for server (if starting now)...");
     Thread.sleep(1000);

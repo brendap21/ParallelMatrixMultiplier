@@ -18,6 +18,19 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
 
     // NEW: pool compartido para evitar creación/destrucción por cada llamada multiplyBlock/multiplyConcurrent
     private final ForkJoinPool sharedPool = new ForkJoinPool(Runtime.getRuntime().availableProcessors());
+    // Optional cached B uploaded by client to avoid re-sending large B each block
+    private volatile int[][] preparedB = null;
+
+    @Override
+    public synchronized void prepareB(int[][] B) throws RemoteException {
+        // store reference (RMI delivers a copy), replacement is atomic due to synchronized
+        this.preparedB = B;
+    }
+
+    @Override
+    public synchronized void clearPreparedB() throws RemoteException {
+        this.preparedB = null;
+    }
 
     @Override
     public int[][] multiply(int[][] A, int[][] B)
@@ -152,6 +165,31 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
             ForkJoinPool pool = new ForkJoinPool(useThreads);
             int threshold = Math.max(1, rows / (useThreads * 2));
             pool.invoke(new MatrixMultiplyBlockTask(A_block, B, Cseg, 0, rows, threshold));
+            pool.shutdown();
+        }
+
+        return Cseg;
+    }
+
+    @Override
+    public int[][] multiplyBlockPrepared(int[][] A_block, int rowOffset, int threadCount)
+            throws RemoteException {
+        if (preparedB == null) throw new RemoteException("No B prepared on server. Call prepareB(B) first.");
+        // Delegate to existing logic but use preparedB
+        int rows = (A_block == null) ? 0 : A_block.length;
+        if (rows == 0) return new int[0][0];
+        int p = preparedB[0].length;
+
+        int[][] Cseg = new int[rows][p];
+        int useThreads = (threadCount <= 0) ? Runtime.getRuntime().availableProcessors() : threadCount;
+
+        if (threadCount <= 0) {
+            int threshold = Math.max(1, rows / (useThreads * 2));
+            sharedPool.invoke(new MatrixMultiplyBlockTask(A_block, preparedB, Cseg, 0, rows, threshold));
+        } else {
+            ForkJoinPool pool = new ForkJoinPool(useThreads);
+            int threshold = Math.max(1, rows / (useThreads * 2));
+            pool.invoke(new MatrixMultiplyBlockTask(A_block, preparedB, Cseg, 0, rows, threshold));
             pool.shutdown();
         }
 

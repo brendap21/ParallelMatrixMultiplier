@@ -26,4 +26,16 @@ public interface MatrixMultiplier extends Remote {
     // threadCount <= 0 => servidor decide (#cores).
     int[][] multiplyBlock(int[][] A_block, int[][] B, int rowOffset, int threadCount)
             throws RemoteException;
+
+    // PREPARE / cached B API: allow the client to upload B once to the server
+    // so subsequent block calls don't need to resend B every time.
+    void prepareB(int[][] B) throws RemoteException;
+
+    // Clear any prepared B stored on the server (optional)
+    void clearPreparedB() throws RemoteException;
+
+    // Multiply using a previously prepared B. A_block are the contiguous rows
+    // corresponding to global rowOffset. Server must have B prepared first.
+    int[][] multiplyBlockPrepared(int[][] A_block, int rowOffset, int threadCount)
+            throws RemoteException;
 }

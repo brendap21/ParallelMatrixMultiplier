@@ -107,6 +107,20 @@ public class ParallelMultiplier {
             localConcurrent = null;
         }
 
+        // Try to prepare B once on each remote endpoint to avoid re-sending B for every block.
+        final boolean[] endpointPrepared = new boolean[endpointCount];
+        for (int i = 0; i < endpointCount; i++) {
+            MatrixMultiplier s = stubs.get(i);
+            if (s == null) { endpointPrepared[i] = false; continue; }
+            try {
+                s.prepareB(B);
+                endpointPrepared[i] = true;
+            } catch (Exception ex) {
+                // If prepare fails, we'll fall back to sending B with each block
+                endpointPrepared[i] = false;
+            }
+        }
+
     int execPoolSize = Math.min(totalAssignedWorkers, Math.max(1, endpointCount * maxParallelRequestsPerEndpoint));
         ExecutorService exec = Executors.newFixedThreadPool(execPoolSize);
         CountDownLatch finishLatch = new CountDownLatch(totalAssignedWorkers);
@@ -149,7 +163,13 @@ public class ParallelMultiplier {
                         Semaphore sem = endpointSemaphores.get(endpointIndex);
                         sem.acquireUninterruptibly();
                         try {
-                            blockResult = stub.multiplyBlock(A_block, B, startRow, effectiveServerThreadCount);
+                            if (endpointPrepared[endpointIndex]) {
+                                // use prepared B on server to avoid re-sending B
+                                blockResult = stub.multiplyBlockPrepared(A_block, startRow, effectiveServerThreadCount);
+                            } else {
+                                // fallback: send B with each call
+                                blockResult = stub.multiplyBlock(A_block, B, startRow, effectiveServerThreadCount);
+                            }
                         } finally {
                             sem.release();
                         }
