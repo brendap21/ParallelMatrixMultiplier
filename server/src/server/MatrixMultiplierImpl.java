@@ -16,6 +16,9 @@ import shared.MatrixMultiplier;
 public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixMultiplier {
     protected MatrixMultiplierImpl() throws RemoteException { super(); }
 
+    // NEW: pool compartido para evitar creación/destrucción por cada llamada multiplyBlock/multiplyConcurrent
+    private final ForkJoinPool sharedPool = new ForkJoinPool(Runtime.getRuntime().availableProcessors());
+
     @Override
     public int[][] multiply(int[][] A, int[][] B)
             throws RemoteException {
@@ -34,10 +37,18 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
         int n = A.length, p = B[0].length, m = B.length;
         int[][] C = new int[n][p];
         int useThreads = (threadCount <= 0) ? Runtime.getRuntime().availableProcessors() : threadCount;
-        ForkJoinPool pool = new ForkJoinPool(useThreads);
-        int threshold = Math.max(1, n / (useThreads * 2));
-        pool.invoke(new MatrixMultiplyTask(A, B, C, 0, n, threshold));
-        pool.shutdown();
+
+        if (threadCount <= 0) {
+            // usar pool compartido
+            int threshold = Math.max(1, n / (useThreads * 2));
+            sharedPool.invoke(new MatrixMultiplyTask(A, B, C, 0, n, threshold));
+        } else {
+            // pool temporal con tamaño solicitado
+            ForkJoinPool pool = new ForkJoinPool(useThreads);
+            int threshold = Math.max(1, n / (useThreads * 2));
+            pool.invoke(new MatrixMultiplyTask(A, B, C, 0, n, threshold));
+            pool.shutdown();
+        }
         return C;
     }
 
@@ -103,14 +114,17 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
         // Crear una matriz temporal Clocal que representa las filas globales[rowStart..rowEnd)
         int[][] Clocal = new int[A.length][p]; // grande, pero solo se llenarán las filas necesarias
         int useThreads = (threadCount <= 0) ? Runtime.getRuntime().availableProcessors() : threadCount;
-        ForkJoinPool pool = new ForkJoinPool(useThreads);
 
-        // threshold basado en filas del segmento
-        int threshold = Math.max(1, Math.max(1, rows / (useThreads * 2)));
-
-        // Invocar ForkJoin para el subconjunto de filas solicitado (el task llenará Clocal en el rango)
-        pool.invoke(new MatrixMultiplyTask(A, B, Clocal, rowStart, rowEnd, threshold));
-        pool.shutdown();
+        if (threadCount <= 0) {
+            int threshold = Math.max(1, Math.max(1, rows / (useThreads * 2)));
+            // usar pool compartido
+            sharedPool.invoke(new MatrixMultiplyTask(A, B, Clocal, rowStart, rowEnd, threshold));
+        } else {
+            ForkJoinPool pool = new ForkJoinPool(useThreads);
+            int threshold = Math.max(1, Math.max(1, rows / (useThreads * 2)));
+            pool.invoke(new MatrixMultiplyTask(A, B, Clocal, rowStart, rowEnd, threshold));
+            pool.shutdown();
+        }
 
         // Copiar solo el segmento requerido a Cseg
         for (int i = 0; i < rows; i++) {
@@ -125,21 +139,22 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
         // A_block: rows x m (rows contiguas de A a partir de rowOffset)
         if (A_block == null || A_block.length == 0) return new int[0][0];
         int rows = A_block.length;
-        int m = A_block[0].length;
         int p = B[0].length;
 
         int[][] Cseg = new int[rows][p];
 
         int useThreads = (threadCount <= 0) ? Runtime.getRuntime().availableProcessors() : threadCount;
-        ForkJoinPool pool = new ForkJoinPool(useThreads);
 
-        // Usaremos una tarea que conoce A_block con índices 0..rows
-        int threshold = Math.max(1, rows / (useThreads * 2));
+        if (threadCount <= 0) {
+            int threshold = Math.max(1, rows / (useThreads * 2));
+            sharedPool.invoke(new MatrixMultiplyBlockTask(A_block, B, Cseg, 0, rows, threshold));
+        } else {
+            ForkJoinPool pool = new ForkJoinPool(useThreads);
+            int threshold = Math.max(1, rows / (useThreads * 2));
+            pool.invoke(new MatrixMultiplyBlockTask(A_block, B, Cseg, 0, rows, threshold));
+            pool.shutdown();
+        }
 
-        pool.invoke(new MatrixMultiplyBlockTask(A_block, B, Cseg, 0, rows, threshold));
-        pool.shutdown();
-
-        // Cseg ya contiene las filas calculadas (correspondientes a rowOffset..rowOffset+rows-1)
         return Cseg;
     }
 

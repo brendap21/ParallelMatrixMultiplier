@@ -10,29 +10,38 @@ import java.util.concurrent.*;
  */
 public class ConcurrentMultiplier {
 
-    // Multiplica matrices completas (como antes)
+    // NEW: pool reutilizable por instancia
+    private final ForkJoinPool pool;
+
+    // Constructores: por defecto usa cores; o se puede especificar número de hilos
+    public ConcurrentMultiplier() {
+        this(Runtime.getRuntime().availableProcessors());
+    }
+    public ConcurrentMultiplier(int threads) {
+        int useThreads = (threads <= 0) ? Runtime.getRuntime().availableProcessors() : threads;
+        this.pool = new ForkJoinPool(useThreads);
+    }
+
+    // Multiplica matrices completas usando el pool reutilizable
     public int[][] multiply(int[][] A, int[][] B, int threads) {
         int n = A.length, p = B[0].length, m = B.length;
         int[][] C = new int[n][p];
-        int useThreads = (threads <= 0) ? Runtime.getRuntime().availableProcessors() : threads;
-        ForkJoinPool pool = new ForkJoinPool(useThreads);
-        int threshold = Math.max(1, n / (useThreads * 2));
+        int useThreads = (threads <= 0) ? pool.getParallelism() : threads;
+
+        int threshold = Math.max(1, n / (Math.max(1, useThreads) * 2));
         pool.invoke(new MatrixMultiplyTask(A, B, C, 0, n, threshold));
-        pool.shutdown();
         return C;
     }
 
-    // NUEVO: Multiplica solo el bloque A_block (rows x m) contra B (m x p). Devuelve rows x p.
+    // Multiplica solo el bloque A_block contra B usando el pool reutilizable
     public int[][] multiplyBlock(int[][] A_block, int[][] B, int threads) {
         if (A_block == null || A_block.length == 0) return new int[0][0];
         int rows = A_block.length;
         int p = B[0].length;
         int[][] Cseg = new int[rows][p];
-        int useThreads = (threads <= 0) ? Runtime.getRuntime().availableProcessors() : threads;
-        ForkJoinPool pool = new ForkJoinPool(useThreads);
-        int threshold = Math.max(1, rows / (useThreads * 2));
+        int useThreads = (threads <= 0) ? pool.getParallelism() : threads;
+        int threshold = Math.max(1, rows / (Math.max(1, useThreads) * 2));
         pool.invoke(new MatrixMultiplyBlockTask(A_block, B, Cseg, 0, rows, threshold));
-        pool.shutdown();
         return Cseg;
     }
 

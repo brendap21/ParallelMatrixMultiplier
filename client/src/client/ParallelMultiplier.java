@@ -90,6 +90,15 @@ public class ParallelMultiplier {
         int rowsPerWorker = (n + totalWorkers - 1) / totalWorkers; // ceil
         int totalAssignedWorkers = totalWorkers;
 
+        // NEW: crear un ConcurrentMultiplier reutilizable para procesamiento local (si hay)
+        final ConcurrentMultiplier localConcurrent;
+        if (hasLocal) {
+            int useLocalThreads = (serverThreadCount > 0) ? serverThreadCount : Runtime.getRuntime().availableProcessors();
+            localConcurrent = new ConcurrentMultiplier(useLocalThreads);
+        } else {
+            localConcurrent = null;
+        }
+
         ExecutorService exec = Executors.newFixedThreadPool(totalAssignedWorkers);
         CountDownLatch finishLatch = new CountDownLatch(totalAssignedWorkers);
 
@@ -119,20 +128,26 @@ public class ParallelMultiplier {
 
                     if (callback != null) callback.onWorkerStarted(workerIndex, endpointIndex);
 
+                    // ADAPTIVE CHUNK: para endpoints remotos usar bloques más grandes (menos RMI)
+                    int effectiveChunk = chunkSize;
+                    if (stub != null) {
+                        // enviar al menos chunkSize pero escalado hasta filasPorWorker (y tope práctico)
+                        int cap = Math.min(256, rowsPerWorker);
+                        effectiveChunk = Math.max(chunkSize, cap);
+                    }
+
                     if (stub == null) {
-                        // Procesamiento LOCAL (cliente) usando ConcurrentMultiplier.multiplyBlock
-                        ConcurrentMultiplier local = new ConcurrentMultiplier();
-                        for (int r = startRow; r < endRow; r += chunkSize) {
+                        // Procesamiento LOCAL (cliente) usando ConcurrentMultiplier reutilizable
+                        for (int r = startRow; r < endRow; r += effectiveChunk) {
                             int chunkStart = r;
-                            int chunkEnd = Math.min(endRow, r + chunkSize);
-                            // construir A_block (rows = chunkEnd-chunkStart)
+                            int chunkEnd = Math.min(endRow, r + effectiveChunk);
                             int rows = chunkEnd - chunkStart;
                             int[][] A_block = new int[rows][A[0].length];
                             for (int i = 0; i < rows; i++) {
                                 System.arraycopy(A[chunkStart + i], 0, A_block[i], 0, A[0].length);
                             }
-                            int[][] blockResult = local.multiplyBlock(A_block, B, Runtime.getRuntime().availableProcessors());
-                            // copiar resultados a C
+                            int localThreads = (serverThreadCount > 0) ? serverThreadCount : Runtime.getRuntime().availableProcessors();
+                            int[][] blockResult = localConcurrent.multiplyBlock(A_block, B, localThreads);
                             for (int i = 0; i < blockResult.length; i++) {
                                 int destRow = chunkStart + i;
                                 System.arraycopy(blockResult[i], 0, C[destRow], 0, blockResult[i].length);
@@ -150,11 +165,10 @@ public class ParallelMultiplier {
                         }
                     } else {
                         // Procesamiento REMOTO: enviamos A_block y pedimos multiplyBlock
-                        for (int r = startRow; r < endRow; r += chunkSize) {
+                        for (int r = startRow; r < endRow; r += effectiveChunk) {
                             int chunkStart = r;
-                            int chunkEnd = Math.min(endRow, r + chunkSize);
+                            int chunkEnd = Math.min(endRow, r + effectiveChunk);
 
-                            // construir A_block para enviar
                             int rows = chunkEnd - chunkStart;
                             int[][] A_block = new int[rows][A[0].length];
                             for (int i = 0; i < rows; i++) {
@@ -163,10 +177,8 @@ public class ParallelMultiplier {
 
                             int[][] chunkResult;
                             try {
-                                // Llamada RMI: solicitar multiplyBlock (servidor procesa internamente)
                                 chunkResult = stub.multiplyBlock(A_block, B, chunkStart, serverThreadCount);
                             } catch (Exception e) {
-                                // reintento simple
                                 try {
                                     chunkResult = stub.multiplyBlock(A_block, B, chunkStart, serverThreadCount);
                                 } catch (Exception e2) {
