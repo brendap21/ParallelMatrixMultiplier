@@ -3,6 +3,7 @@ package client;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ConcurrentHashMap;
+import java.time.Duration;
 
 public class ClientLogger {
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
