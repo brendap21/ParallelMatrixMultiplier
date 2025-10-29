@@ -578,7 +578,7 @@ public class AppGUI extends JFrame {
         // Pedir lista de servidores al usuario
         String serversStr = JOptionPane.showInputDialog(this,
                 "Introduce lista de servidores (IPs o hostnames) separados por comas.\nEj: 192.168.1.10,192.168.1.11\n(Se usará el servicio RMI 'MatrixService' en puerto 1099)\nDejar vacío y pulsar OK para usar solo procesamiento local.\n\nSUGERENCIA: Para matrices grandes, usa chunk >= 100 para mejor rendimiento distribuido.",
-                "192.168.1.10,192.168.1.11");
+                "192.168.100.217");
         if (serversStr == null) {
             appendInfo("Ejecución paralelo cancelada por el usuario.\n");
             return;

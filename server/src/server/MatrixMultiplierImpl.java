@@ -14,7 +14,18 @@ import shared.MatrixMultiplier;
  * - multiplyBlock (NUEVO): recibe A_block (solo las filas necesarias) y lo procesa en paralelo internamente
  */
 public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixMultiplier {
-    protected MatrixMultiplierImpl() throws RemoteException { super(); }
+    private static final String SERVER_ID = System.getProperty("server.id", "Server");
+    private final ServerLogger logger;
+    
+    protected MatrixMultiplierImpl() throws RemoteException { 
+        super(); 
+        this.logger = new ServerLogger(SERVER_ID);
+        logger.info("Servidor iniciado y listo para procesar multiplicaciones de matrices");
+    }
+    
+    private void logProgress(String operation, int current, int total) {
+        logger.progress(operation, current, total);
+    }
 
     // NEW: pool compartido para evitar creación/destrucción por cada llamada multiplyBlock/multiplyConcurrent
     private final ForkJoinPool sharedPool = new ForkJoinPool(Runtime.getRuntime().availableProcessors());
@@ -149,6 +160,8 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
     @Override
     public int[][] multiplyBlock(int[][] A_block, int[][] B, int rowOffset, int threadCount)
             throws RemoteException {
+        logger.info(String.format("Iniciando multiplicación de bloque: filas %d-%d (total: %d filas)", 
+            rowOffset, rowOffset + A_block.length - 1, A_block.length));
         // A_block: rows x m (rows contiguas de A a partir de rowOffset)
         if (A_block == null || A_block.length == 0) return new int[0][0];
         int rows = A_block.length;
