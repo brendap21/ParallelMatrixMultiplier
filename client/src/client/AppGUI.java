@@ -798,4 +798,8 @@ public class AppGUI extends JFrame {
 	public static void main(String[] args) {
 		SwingUtilities.invokeLater(() -> new AppGUI().setVisible(true));
 	}
+
+    private void logMatrixOperation(int rows, int cols) {
+        clientLogger.info(String.format("Operación de matriz: %d filas, %d columnas", rows, cols));
+    }
 }
