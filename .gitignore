@@ -1,6 +1,8 @@
-/client/lib/
-/server/lib/
-/shared/lib/
-/client/bin/
-/server/bin/
-/shared/bin/
+client/lib/
+server/lib/
+shared/lib/
+client/bin/client
+server/bin/server
+shared/bin/shared
+src/shared/MatrixMultiplier.class
+out/production/shared/shared/MatrixMultiplier.class
