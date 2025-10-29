@@ -25,6 +25,10 @@ import client.ParallelMultiplier.ProgressCallback;
  */
 public class AppGUI extends JFrame {
     private static volatile AppGUI instance = null;
+
+    public static AppGUI getInstanceIfExists() {
+        return instance;
+    }
     private final ClientLogger clientLogger = new ClientLogger("Cliente");
     private int[][] A, B, C;
     private JTable tblA, tblB, tblC;
