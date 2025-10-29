@@ -249,7 +249,7 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
             if (rowEnd - rowStart <= threshold) {
                 int p = B[0].length, m = B.length;
                 // Registrar inicio del procesamiento de este bloque
-                logger.threadStart(rowStart, rowEnd);
+                logger.threadStart(rowStart, rowEnd, Thread.currentThread().getId()); // Cambiar para incluir threadId
                 
                 for (int i = rowStart; i < rowEnd; i++) {
                     for (int j = 0; j < p; j++) {
@@ -260,10 +260,10 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
                         Cseg[i][j] += s;
                     }
                     // Registrar progreso por fila
-                    logger.threadProgress(i);
+                    logger.threadProgress(i, i - rowStart); // Cambiar para incluir currentRow
                 }
                 // Registrar finalización del bloque
-                logger.threadComplete();
+                logger.threadComplete(Thread.currentThread().getId()); // Cambiar para incluir threadId
                 // Actualizar progreso global
                 updateProgress(rowEnd - rowStart);
             } else {
