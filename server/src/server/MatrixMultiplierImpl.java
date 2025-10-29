@@ -3,6 +3,7 @@ package server;
 import java.rmi.server.UnicastRemoteObject;
 import java.rmi.RemoteException;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import shared.MatrixMultiplier;
 
 /**
@@ -16,11 +17,23 @@ import shared.MatrixMultiplier;
 public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixMultiplier {
     private static final String SERVER_ID = System.getProperty("server.id", "Server");
     private final ServerLogger logger;
+    private final AtomicInteger processedRows = new AtomicInteger(0);
+    private int totalRows;
     
     protected MatrixMultiplierImpl() throws RemoteException { 
         super(); 
         this.logger = new ServerLogger(SERVER_ID);
         logger.info("Servidor iniciado y listo para procesar multiplicaciones de matrices");
+    }
+    
+    private void resetProgress(int totalRows) {
+        this.totalRows = totalRows;
+        this.processedRows.set(0);
+    }
+    
+    private void updateProgress(int rowsProcessed) {
+        int currentProgress = processedRows.addAndGet(rowsProcessed);
+        logProgress("Multiplicación de matriz", currentProgress, totalRows);
     }
     
     private void logProgress(String operation, int current, int total) {
@@ -160,6 +173,7 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
     @Override
     public int[][] multiplyBlock(int[][] A_block, int[][] B, int rowOffset, int threadCount)
             throws RemoteException {
+        resetProgress(A_block.length);
         logger.info(String.format("Iniciando multiplicación de bloque: filas %d-%d (total: %d filas)", 
             rowOffset, rowOffset + A_block.length - 1, A_block.length));
         // A_block: rows x m (rows contiguas de A a partir de rowOffset)
@@ -210,7 +224,7 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
     }
 
     // Tarea ForkJoin para bloques A_block que comienzan en índice 0..rows-1
-    private static class MatrixMultiplyBlockTask extends RecursiveAction {
+    private class MatrixMultiplyBlockTask extends RecursiveAction {
         private final int[][] Ablock, B, Cseg;
         private final int rowStart, rowEnd, threshold;
         MatrixMultiplyBlockTask(int[][] Ablock, int[][] B, int[][] Cseg, int rowStart, int rowEnd, int threshold) {
@@ -230,6 +244,8 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
                         Cseg[i][j] += s;
                     }
                 }
+                // Actualizar progreso después de procesar este bloque
+                updateProgress(rowEnd - rowStart);
             } else {
                 int mid = (rowStart + rowEnd) / 2;
                 invokeAll(
