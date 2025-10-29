@@ -9,7 +9,7 @@ import java.util.concurrent.*;
  * - multiplyBlock(A_block,B,threads) -> multiplica solo A_block (rows x m) contra B y devuelve rows x p result
  */
 public class ConcurrentMultiplier {
-
+	
     // NEW: pool reutilizable por instancia
     private final ForkJoinPool pool;
 
