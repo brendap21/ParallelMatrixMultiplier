@@ -53,19 +53,6 @@ public class ServerLogger {
         String timestamp = LocalDateTime.now().format(TIME_FORMAT);
         System.out.printf("[%s][%s][%s] %s%n", timestamp, serverId, level, message);
     }
-}
-        if (info != null) {
-            Duration elapsed = Duration.between(info.startTime, LocalDateTime.now());
-            double rowsPerSecond = info.rowsProcessed / (Math.max(0.001, elapsed.toSeconds()));
-            
-            log("SUCCESS", String.format("Hilo #%d TERMINA [Filas: %d-%d] - Tiempo: %d.%03ds, Velocidad: %.2f filas/seg", 
-                threadId, info.startRow, info.endRow, 
-                elapsed.toSeconds(), elapsed.toMillisPart(),
-                rowsPerSecond));
-                
-            threadInfo.remove(threadId);
-        }
-    }
 
     public void info(String message) {
         log("INFO", message);
@@ -87,10 +74,5 @@ public class ServerLogger {
 
     public void logMatrixOperation(int rows, int cols) {
         log("INFO", String.format("Operación de matriz: %d filas, %d columnas", rows, cols));
-    }
-
-    private void log(String level, String message) {
-        String timestamp = LocalDateTime.now().format(TIME_FORMAT);
-        System.out.printf("[%s][%s][%s] %s%n", timestamp, serverId, level, message);
     }
 }
