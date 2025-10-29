@@ -32,20 +32,23 @@ public class ServerLogger {
     public void threadStart(int threadId, int startRow, int endRow) {
         ThreadInfo info = new ThreadInfo(startRow, endRow);
         threadInfo.put(threadId, info);
-        log("THREAD", String.format("Hilo #%d INICIA [Filas: %d-%d]", threadId + 1, startRow + 1, endRow));
+        log("THREAD", String.format("Hilo #%d INICIA [Filas: %d-%d]", threadId+1, startRow+1, endRow));
     }
 
     public void threadProgress(int threadId, int currentRow) {
         ThreadInfo info = threadInfo.get(threadId);
         if (info != null) {
             info.rowsProcessed++;
+            // Opcional: muestra progreso por fila
+            log("PROGRESS", String.format("Hilo #%d fila %d procesando...", threadId+1, currentRow+1));
         }
     }
 
     public void threadComplete(int threadId) {
         ThreadInfo info = threadInfo.get(threadId);
         if (info != null) {
-            log("THREAD", String.format("Hilo #%d COMPLETO [Filas procesadas: %d]", threadId + 1, info.rowsProcessed));
+            log("SUCCESS", String.format("Hilo #%d TERMINA [Filas: %d-%d] - Procesadas: %d", threadId+1, info.startRow+1, info.endRow, info.rowsProcessed));
+            threadInfo.remove(threadId);
         }
     }
 

@@ -168,6 +168,8 @@ public class ParallelMultiplier {
                         int localThreads = (effectiveServerThreadCount > 0) ? effectiveServerThreadCount : Runtime.getRuntime().availableProcessors();
                         // LOGS EN LA GUI DEL CLIENTE PARA PROCESAMIENTO LOCAL
                         long hiloStart = System.currentTimeMillis();
+                        // --- NUEVO: LOGS EN CONSOLA Y GUI COMO EN CONCURRENTEMULTIPLIER ---
+                        if (logger != null) logger.threadStart(workerIndex, startRow, endRow);
                         if (callback != null) {
                             SwingUtilities.invokeLater(() -> {
                                 // Log de inicio
@@ -177,6 +179,7 @@ public class ParallelMultiplier {
                         }
                         blockResult = new int[totalForWorker][B[0].length];
                         for (int i = 0; i < totalForWorker; i++) {
+                            if (logger != null) logger.threadProgress(workerIndex, startRow + i);
                             if (i % 10 == 0 && callback != null) {
                                 final int fila = i;
                                 SwingUtilities.invokeLater(() -> {
@@ -190,6 +193,7 @@ public class ParallelMultiplier {
                                 blockResult[i][j] = s;
                             }
                         }
+                        if (logger != null) logger.threadComplete(workerIndex);
                         if (callback != null) {
                             long hiloEnd = System.currentTimeMillis();
                             SwingUtilities.invokeLater(() -> {
