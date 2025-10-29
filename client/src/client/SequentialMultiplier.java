@@ -1,4 +1,3 @@
-
 /* 
 n es el número de filas de A
 p es el número de columnas de B
@@ -26,4 +25,5 @@ public class SequentialMultiplier {
                     C[i][j] += A[i][k] * B[k][j];
         return C;
     }
+}
 }
