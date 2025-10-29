@@ -90,4 +90,3 @@ public class ServerLogger {
         System.out.printf("[%s][%s][%s] %s%n", timestamp, serverId, level, message);
     }
 }
-}
