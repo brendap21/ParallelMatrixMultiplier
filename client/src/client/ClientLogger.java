@@ -1,7 +1,6 @@
 package client;
 
 import java.time.LocalDateTime;
-import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -72,4 +71,5 @@ public class ClientLogger {
         String timestamp = LocalDateTime.now().format(TIME_FORMAT);
         System.out.printf("[%s][%s][%s] %s%n", timestamp, clientId, level, message);
     }
+}
 }

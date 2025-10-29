@@ -75,6 +75,9 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
         int[][] C = new int[n][p];
         int useThreads = (threadCount <= 0) ? Runtime.getRuntime().availableProcessors() : threadCount;
 
+        logger.info("Iniciando multiplicación concurrente de matrices.");
+        logger.info(String.format("Tamaño de matrices: %dx%d, Usando %d hilos", n, p, useThreads));
+
         if (threadCount <= 0) {
             // usar pool compartido
             int threshold = Math.max(1, n / (useThreads * 2));
@@ -86,6 +89,7 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
             pool.invoke(new MatrixMultiplyTask(A, B, C, 0, n, threshold));
             pool.shutdown();
         }
+        logger.success("Multiplicación concurrente completada.");
         return C;
     }
 
@@ -152,6 +156,9 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
         int[][] Clocal = new int[A.length][p]; // grande, pero solo se llenarán las filas necesarias
         int useThreads = (threadCount <= 0) ? Runtime.getRuntime().availableProcessors() : threadCount;
 
+        logger.info(String.format("Iniciando multiplicación concurrente de segmento: filas %d-%d", rowStart, rowEnd));
+        logger.info(String.format("Tamaño del segmento: %dx%d, Usando %d hilos", rows, p, useThreads));
+
         if (threadCount <= 0) {
             int threshold = Math.max(1, Math.max(1, rows / (useThreads * 2)));
             // usar pool compartido
@@ -167,6 +174,7 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
         for (int i = 0; i < rows; i++) {
             System.arraycopy(Clocal[rowStart + i], 0, Cseg[i], 0, p);
         }
+        logger.success("Multiplicación concurrente de segmento completada.");
         return Cseg;
     }
 
@@ -198,6 +206,7 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
             pool.shutdown();
         }
 
+        logger.success("Multiplicación de bloque completada.");
         return Cseg;
     }
 
@@ -223,6 +232,7 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
             pool.shutdown();
         }
 
+        logger.success("Multiplicación de bloque con B preparado completada.");
         return Cseg;
     }
 

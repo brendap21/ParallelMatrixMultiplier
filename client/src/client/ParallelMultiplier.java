@@ -19,6 +19,11 @@ import javax.swing.SwingUtilities;
  * - El callback ProgressCallback se llama por cada chunk completado para actualizar la UI.
  */
 public class ParallelMultiplier {
+    private final ClientLogger logger;
+
+    public ParallelMultiplier(String clientId) {
+        this.logger = new ClientLogger(clientId);
+    }
 
     public static class ServerInfo {
         public final String host;
@@ -40,7 +45,9 @@ public class ParallelMultiplier {
     }
 
     // Elimina chunkSize
-    public ParallelMultiplier() {}
+    public ParallelMultiplier() {
+        this.logger = null;
+    }
 
     /**
      * Multiplica A x B de forma distribuida entre servidores y posible procesamiento local.
