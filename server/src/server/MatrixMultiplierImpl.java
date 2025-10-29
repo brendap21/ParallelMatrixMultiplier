@@ -174,8 +174,14 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
     public int[][] multiplyBlock(int[][] A_block, int[][] B, int rowOffset, int threadCount)
             throws RemoteException {
         resetProgress(A_block.length);
+        
+        int actualThreads = (threadCount <= 0) ? Runtime.getRuntime().availableProcessors() : threadCount;
+        int rowsPerWorker = Math.max(1, A_block.length / actualThreads);
+        
         logger.info(String.format("Iniciando multiplicación de bloque: filas %d-%d (total: %d filas)", 
             rowOffset, rowOffset + A_block.length - 1, A_block.length));
+        logger.info(String.format("Configuración: %d workers, aproximadamente %d filas por worker", 
+            actualThreads, rowsPerWorker));
         // A_block: rows x m (rows contiguas de A a partir de rowOffset)
         if (A_block == null || A_block.length == 0) return new int[0][0];
         int rows = A_block.length;
@@ -227,14 +233,26 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
     private class MatrixMultiplyBlockTask extends RecursiveAction {
         private final int[][] Ablock, B, Cseg;
         private final int rowStart, rowEnd, threshold;
+        private final int workerId;
+        private static final AtomicInteger nextWorkerId = new AtomicInteger(1);
+        
         MatrixMultiplyBlockTask(int[][] Ablock, int[][] B, int[][] Cseg, int rowStart, int rowEnd, int threshold) {
             this.Ablock = Ablock; this.B = B; this.Cseg = Cseg;
             this.rowStart = rowStart; this.rowEnd = rowEnd; this.threshold = threshold;
+            this.workerId = nextWorkerId.getAndIncrement();
         }
+        
         @Override
         protected void compute() {
             if (rowEnd - rowStart <= threshold) {
+                // Log inicio del worker
+                logger.info(String.format("Worker-%d iniciando procesamiento de filas %d-%d (bloque de %d filas)", 
+                    workerId, rowStart, rowEnd - 1, rowEnd - rowStart));
+                
                 int p = B[0].length, m = B.length;
+                int rowsProcessed = 0;
+                int totalRows = rowEnd - rowStart;
+                
                 for (int i = rowStart; i < rowEnd; i++) {
                     for (int j = 0; j < p; j++) {
                         int s = 0;
@@ -243,8 +261,21 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
                         }
                         Cseg[i][j] += s;
                     }
+                    rowsProcessed++;
+                    
+                    // Log progreso cada 10% o cuando solo hay pocas filas
+                    if (rowsProcessed % Math.max(1, totalRows / 10) == 0) {
+                        double percentComplete = (double) rowsProcessed / totalRows * 100;
+                        logger.info(String.format("Worker-%d: %.1f%% completado (%d/%d filas)", 
+                            workerId, percentComplete, rowsProcessed, totalRows));
+                    }
                 }
-                // Actualizar progreso después de procesar este bloque
+                
+                // Log finalización del worker
+                logger.success(String.format("Worker-%d completó el procesamiento de filas %d-%d", 
+                    workerId, rowStart, rowEnd - 1));
+                
+                // Actualizar progreso global
                 updateProgress(rowEnd - rowStart);
             } else {
                 int mid = (rowStart + rowEnd) / 2;
