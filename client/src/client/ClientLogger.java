@@ -72,4 +72,4 @@ public class ClientLogger {
         System.out.printf("[%s][%s][%s] %s%n", timestamp, clientId, level, message);
     }
 }
-}
+

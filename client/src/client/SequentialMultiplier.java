@@ -26,4 +26,4 @@ public class SequentialMultiplier {
         return C;
     }
 }
-}
+
