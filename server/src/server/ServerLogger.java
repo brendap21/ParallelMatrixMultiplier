@@ -1,14 +1,70 @@
 package server;
 
 import java.time.LocalDateTime;
+import java.time.Duration;
 import java.time.format.DateTimeFormatter;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ServerLogger {
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
     private final String serverId;
+    private final ConcurrentHashMap<Long, ThreadInfo> threadInfo = new ConcurrentHashMap<>();
+    
+    private static class ThreadInfo {
+        LocalDateTime startTime;
+        int rowsProcessed;
+        int totalRows;
+        int startRow;
+        int endRow;
+        
+        ThreadInfo(int startRow, int endRow) {
+            this.startTime = LocalDateTime.now();
+            this.rowsProcessed = 0;
+            this.totalRows = endRow - startRow;
+            this.startRow = startRow;
+            this.endRow = endRow;
+        }
+    }
 
     public ServerLogger(String serverId) {
         this.serverId = serverId;
+    }
+
+    public void threadStart(int startRow, int endRow) {
+        long threadId = Thread.currentThread().getId();
+        ThreadInfo info = new ThreadInfo(startRow, endRow);
+        threadInfo.put(threadId, info);
+        log("THREAD", String.format("Hilo #%d INICIA [Filas: %d-%d]", 
+            threadId, startRow, endRow));
+    }
+
+    public void threadProgress(int currentRow) {
+        long threadId = Thread.currentThread().getId();
+        ThreadInfo info = threadInfo.get(threadId);
+        if (info != null) {
+            info.rowsProcessed++;
+            Duration elapsed = Duration.between(info.startTime, LocalDateTime.now());
+            double rowsPerSecond = info.rowsProcessed / (elapsed.toMillis() / 1000.0);
+            
+            log("PROGRESS", String.format("Hilo #%d fila %d procesando... (%.2f filas/seg)", 
+                threadId, currentRow, rowsPerSecond));
+        }
+    }
+
+    public void threadComplete() {
+        long threadId = Thread.currentThread().getId();
+        ThreadInfo info = threadInfo.get(threadId);
+        if (info != null) {
+            Duration elapsed = Duration.between(info.startTime, LocalDateTime.now());
+            double rowsPerSecond = info.rowsProcessed / (Math.max(0.001, elapsed.toSeconds()));
+            
+            log("SUCCESS", String.format("Hilo #%d TERMINA [Filas: %d-%d] - Tiempo: %d.%03ds, Velocidad: %.2f filas/seg", 
+                threadId, info.startRow, info.endRow, 
+                elapsed.toSeconds(), elapsed.toMillisPart(),
+                rowsPerSecond));
+                
+            threadInfo.remove(threadId);
+        }
     }
 
     public void info(String message) {
@@ -25,8 +81,13 @@ public class ServerLogger {
         log("SUCCESS", message);
     }
 
+    public void performance(String message) {
+        log("PERFORMANCE", message);
+    }
+
     private void log(String level, String message) {
         String timestamp = LocalDateTime.now().format(TIME_FORMAT);
         System.out.printf("[%s][%s][%s] %s%n", timestamp, serverId, level, message);
     }
+}
 }
