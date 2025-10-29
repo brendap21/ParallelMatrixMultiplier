@@ -63,9 +63,6 @@ public class AppGUI extends JFrame {
 
     public AppGUI() {
         instance = this;
-    public static AppGUI getInstanceIfExists() {
-        return instance;
-    }
         super("Multiplicador de Matrices");
 
         setLayout(new BorderLayout(6, 6));
