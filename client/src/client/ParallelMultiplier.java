@@ -6,6 +6,7 @@ import java.rmi.Naming;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.ArrayList;
+import javax.swing.SwingUtilities;
 
 /**
  * ParallelMultiplier (distribuido + procesamiento concurrente local)

@@ -62,8 +62,8 @@ public class AppGUI extends JFrame {
     private long startTimeSeq;
 
     public AppGUI() {
-        instance = this;
         super("Multiplicador de Matrices");
+        instance = this;
 
         setLayout(new BorderLayout(6, 6));
 
@@ -343,12 +343,12 @@ public class AppGUI extends JFrame {
     }
     // exportLog eliminado
     private void appendInfo(String msg) { appendStyled("[INFO] ➡ " + msg, LogType.INFO); }
-    private void appendProgress(String msg) {
+    public void appendProgress(String msg) {
         synchronized (logLock) {
             appendStyled(msg, LogType.PROGRESS);
         }
     }
-    private void appendSuccess(String msg) { appendStyled("[ÉXITO] ✔ " + msg, LogType.SUCCESS); }
+    public void appendSuccess(String msg) { appendStyled("[ÉXITO] ✔ " + msg, LogType.SUCCESS); }
     private void appendError(String msg) { appendStyled("[ERROR] ✖ " + msg, LogType.ERROR); }
     private void appendWarning(String msg) { appendStyled("[ADVERTENCIA] ⚠ " + msg, LogType.WARNING); }
 
