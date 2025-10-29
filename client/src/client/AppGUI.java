@@ -9,6 +9,7 @@ import java.util.Random;
 import java.util.concurrent.*;
 import java.util.List;
 import java.util.ArrayList;
+import client.ClientLogger;
 
 import client.ParallelMultiplier.ServerInfo;
 import client.ParallelMultiplier.ProgressCallback;
@@ -23,6 +24,7 @@ import client.ParallelMultiplier.ProgressCallback;
  * Ahora con control de chunkSize (JSpinner) para ajustar filas por bloque.
  */
 public class AppGUI extends JFrame {
+    private final ClientLogger clientLogger = new ClientLogger("Cliente");
     private int[][] A, B, C;
     private JTable tblA, tblB, tblC;
     private JTextPane statusPane; // ahora JTextPane para colores
@@ -488,10 +490,12 @@ public class AppGUI extends JFrame {
 
             exec.submit(() -> {
                 threadStartTimes.set(threadIndex, System.currentTimeMillis());
-                appendProgress("Hilo #" + (threadIndex + 1) + " INICIA [Filas: " + (from + 1) + "-" + to + "]\n");
+                clientLogger.threadStart(threadIndex, from, to);
+                appendProgress(String.format("[Concurrente] Worker #%d INICIA [Filas: %d-%d]\n", threadIndex+1, from+1, to));
                 try {
                     for (int i = from; i < to; i++) {
-                        appendProgress("Hilo #" + (threadIndex + 1) + " fila " + (i + 1) + " procesando...\n");
+                        clientLogger.threadProgress(threadIndex, i);
+                        appendProgress(String.format("[Concurrente] Worker #%d fila %d procesando...\n", threadIndex+1, i+1));
                         for (int j = 0; j < n; j++) {
                             int sum = 0;
                             for (int k = 0; k < n; k++) sum += A[i][k] * B[k][j];
@@ -519,9 +523,10 @@ public class AppGUI extends JFrame {
                         });
                     }
                 } catch (Exception ex) {
-                    SwingUtilities.invokeLater(() -> appendError("❌ Hilo #" + (threadIndex + 1) + " ERROR: " + ex.getMessage()));
+                    SwingUtilities.invokeLater(() -> appendError("❌ Worker #" + (threadIndex + 1) + " ERROR: " + ex.getMessage()));
                 } finally {
-                    appendProgress("Hilo #" + (threadIndex + 1) + " TERMINA [Filas: " + (from + 1) + "-" + to + "]\n");
+                    clientLogger.threadComplete(threadIndex);
+                    appendProgress(String.format("[Concurrente] Worker #%d TERMINA [Filas: %d-%d]\n", threadIndex+1, from+1, to));
                     latch.countDown();
                     SwingUtilities.invokeLater(() -> {
                         // marcar hilo completado si terminó todas sus filas
