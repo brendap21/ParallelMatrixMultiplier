@@ -60,19 +60,19 @@ public class ServerLogger {
         log("SUCCESS", message);
     }
 
+    public void performance(String message) {
+        log("PERFORMANCE", message);
+    }
+
+    public void logMatrixOperation(int rows, int cols) {
+        log("INFO", String.format("Operación de matriz: %d filas, %d columnas", rows, cols));
+    }
+
     private void log(String level, String message) {
         String timestamp = LocalDateTime.now().format(TIME_FORMAT);
         System.out.printf("[%s][%s][%s] %s%n", timestamp, serverId, level, message);
     }
 }
-    }
-
-    public void success(String message) {
-        log("SUCCESS", message);
-    }
-
-    public void performance(String message) {
-        log("PERFORMANCE", message);
     }
 
     public void logMatrixOperation(int rows, int cols) {
