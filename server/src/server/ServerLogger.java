@@ -73,9 +73,4 @@ public class ServerLogger {
         System.out.printf("[%s][%s][%s] %s%n", timestamp, serverId, level, message);
     }
 }
-    }
 
-    public void logMatrixOperation(int rows, int cols) {
-        log("INFO", String.format("Operación de matriz: %d filas, %d columnas", rows, cols));
-    }
-}
