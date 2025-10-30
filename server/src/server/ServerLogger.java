@@ -27,16 +27,16 @@ public class ServerLogger {
     public void threadStart(int threadId, int startRow, int endRow) {
         ThreadInfo info = new ThreadInfo(startRow, endRow);
         threadInfo.put(threadId, info);
-        long javaThreadId = Thread.currentThread().getId();
-        System.out.printf("[Paralelo] Bloque #%d (Hilo Java: %d) INICIA [Filas: %d-%d]%n", threadId+1, javaThreadId, startRow+1, endRow);
+        // threadId: número de hilo lógico (0-based)
+        System.out.printf("[Paralelo] Hilo #%d INICIA [Filas: %d-%d]%n", threadId+1, startRow+1, endRow);
     }
 
     // Log de progreso de hilo (por fila)
     public void threadProgress(int threadId, int currentRow) {
         ThreadInfo info = threadInfo.get(threadId);
         if (info != null) {
-            long javaThreadId = Thread.currentThread().getId();
-            System.out.printf("[Paralelo] Bloque #%d (Hilo Java: %d) fila %d procesando...%n", threadId+1, javaThreadId, currentRow+1);
+            // threadId: número de hilo lógico (0-based)
+            System.out.printf("[Paralelo] Hilo #%d fila %d procesando...%n", threadId+1, currentRow+1);
         }
     }
 
@@ -44,9 +44,8 @@ public class ServerLogger {
     public void threadComplete(int threadId) {
         ThreadInfo info = threadInfo.get(threadId);
         if (info != null) {
-            long javaThreadId = Thread.currentThread().getId();
             Duration elapsed = Duration.between(info.startTime, LocalDateTime.now());
-            System.out.printf("[ÉXITO] [Paralelo] Bloque #%d (Hilo Java: %d) TERMINA [Filas: %d-%d] - Tiempo: %.3fs%n", threadId+1, javaThreadId, info.startRow+1, info.endRow, elapsed.toMillis()/1000.0);
+            System.out.printf("[ÉXITO] [Paralelo] Hilo #%d TERMINA [Filas: %d-%d] - Tiempo: %.3fs%n", threadId+1, info.startRow+1, info.endRow, elapsed.toMillis()/1000.0);
             threadInfo.remove(threadId);
         }
     }
