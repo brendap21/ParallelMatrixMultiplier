@@ -21,9 +21,8 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
     private int totalRows;
     
     protected MatrixMultiplierImpl() throws RemoteException { 
-        super(); 
-        this.logger = new ServerLogger(SERVER_ID);
-        logger.info("Servidor iniciado y listo para procesar multiplicaciones de matrices");
+    super(); 
+    this.logger = new ServerLogger(SERVER_ID);
     }
     
     private void resetProgress(int totalRows) {
@@ -37,7 +36,7 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
     }
     
     private void logProgress(String operation, int current, int total) {
-        logger.progress(operation, current, total);
+    // Progreso global eliminado, solo logs de hilos
     }
 
     // NEW: pool compartido para evitar creación/destrucción por cada llamada multiplyBlock/multiplyConcurrent
@@ -75,8 +74,7 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
         int[][] C = new int[n][p];
         int useThreads = (threadCount <= 0) ? Runtime.getRuntime().availableProcessors() : threadCount;
 
-        logger.info("Multiplicación concurrente de matrices.");
-        logger.info(String.format("Tamaño de matrices: %dx%d, Usando %d hilos", n, p, useThreads));
+    // Info eliminada, solo logs de hilos
 
         if (threadCount <= 0) {
             int threshold = Math.max(1, n / (useThreads * 2));
@@ -87,7 +85,7 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
             pool.invoke(new MatrixMultiplyTask(A, B, C, 0, n, threshold));
             pool.shutdown();
         }
-        logger.success("Multiplicación concurrente completada.");
+    // Success eliminado, solo logs de hilos
         return C;
     }
 
@@ -154,8 +152,7 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
         int[][] Clocal = new int[A.length][p]; // grande, pero solo se llenarán las filas necesarias
         int useThreads = (threadCount <= 0) ? Runtime.getRuntime().availableProcessors() : threadCount;
 
-        logger.info(String.format("Multiplicación concurrente de segmento: filas %d-%d", rowStart, rowEnd));
-        logger.info(String.format("Tamaño del segmento: %dx%d, Usando %d hilos", rows, p, useThreads));
+    // Info eliminada, solo logs de hilos
 
         if (threadCount <= 0) {
             int threshold = Math.max(1, Math.max(1, rows / (useThreads * 2)));
@@ -172,7 +169,7 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
         for (int i = 0; i < rows; i++) {
             System.arraycopy(Clocal[rowStart + i], 0, Cseg[i], 0, p);
         }
-        logger.success("Multiplicación concurrente de segmento completada.");
+    // Success eliminado, solo logs de hilos
         return Cseg;
     }
 
@@ -181,10 +178,7 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
             throws RemoteException {
         resetProgress(A_block.length);
         int actualThreads = (threadCount <= 0) ? Runtime.getRuntime().availableProcessors() : threadCount;
-        logger.info(String.format("Multiplicación de bloque: filas %d-%d (total: %d filas)", 
-            rowOffset, rowOffset + A_block.length - 1, A_block.length));
-        logger.info(String.format("Usando %d hilos, tamaño de matrices: %dx%d", 
-            actualThreads, A_block.length, B[0].length));
+        // Info eliminada, solo logs de hilos
         // A_block: rows x m (rows contiguas de A a partir de rowOffset)
         if (A_block == null || A_block.length == 0) return new int[0][0];
         int rows = A_block.length;
@@ -204,7 +198,7 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
             pool.shutdown();
         }
 
-        logger.success("Multiplicación de bloque completada.");
+    // Success eliminado, solo logs de hilos
         return Cseg;
     }
 
@@ -219,10 +213,7 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
         int[][] Cseg = new int[rows][p];
         int useThreads = (threadCount <= 0) ? Runtime.getRuntime().availableProcessors() : threadCount;
 
-        logger.info(String.format("Multiplicación de bloque con B preparado: filas %d-%d (total: %d filas)", 
-            rowOffset, rowOffset + rows - 1, rows));
-        logger.info(String.format("Usando %d hilos, tamaño de matrices: %dx%d", 
-            useThreads, rows, p));
+        // Info eliminada, solo logs de hilos
 
         if (threadCount <= 0) {
             int threshold = Math.max(1, rows / (useThreads * 2));
@@ -234,7 +225,7 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
             pool.shutdown();
         }
 
-        logger.success("Multiplicación de bloque con B preparado completada.");
+    // Success eliminado, solo logs de hilos
         return Cseg;
     }
 
