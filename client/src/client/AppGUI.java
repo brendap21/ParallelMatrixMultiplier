@@ -663,60 +663,57 @@ public class AppGUI extends JFrame {
         ProgressCallback cb = new ProgressCallback() {
             @Override
             public void onChunkCompleted(int workerIndex, int endpointIndex, int rowsCompletedForWorker,
-                                         int rowsTotalForWorker, int globalCompleted, int globalTotal) {
+                                        int rowsTotalForWorker, int globalCompleted, int globalTotal) {
                 SwingUtilities.invokeLater(() -> {
-                    // Solo mostrar logs de hilos locales (cliente)
-                    if (endpointIndex >= servers.size()) {
-                        // actualizar barra global
-                        progressBar.setValue(globalCompleted);
-                        int percent = (int) (100.0 * progressBar.getValue() / progressBar.getMaximum());
-                        progressBar.setString(percent + "%");
+                    progressBar.setValue(globalCompleted);
+                    int percent = (int) (100.0 * progressBar.getValue() / progressBar.getMaximum());
+                    progressBar.setString(percent + "%");
 
-                        // actualizar barra hilo
-                        if (workerIndex < threadBars.size()) {
-                            JProgressBar pb = threadBars.get(workerIndex);
-                            int newVal = Math.min(pb.getMaximum(), rowsCompletedForWorker);
-                            pb.setValue(newVal);
-                            pb.setString(newVal + "/" + threadTotalRows.get(workerIndex));
-                        }
-
-                        // actualizar tiempo estimado del hilo
-                        if (workerIndex < threadTimeLabels.size()) {
-                            if (threadStartTimes.get(workerIndex) == 0L) threadStartTimes.set(workerIndex, System.currentTimeMillis());
-                            long elapsed = System.currentTimeMillis() - threadStartTimes.get(workerIndex);
-                            threadTimeLabels.get(workerIndex).setText(formatMillis(elapsed));
-                        }
-
-                        appendProgress(String.format("Hilo #%d filas %d/%d procesando...\n", workerIndex+1, rowsCompletedForWorker, rowsTotalForWorker));
-                        display(tblC, C);
+                    if (workerIndex < threadBars.size()) {
+                        JProgressBar pb = threadBars.get(workerIndex);
+                        int newVal = Math.min(pb.getMaximum(), rowsCompletedForWorker);
+                        pb.setValue(newVal);
+                        pb.setString(newVal + "/" + threadTotalRows.get(workerIndex));
                     }
+
+                    if (workerIndex < threadTimeLabels.size()) {
+                        if (threadStartTimes.get(workerIndex) == 0L) threadStartTimes.set(workerIndex, System.currentTimeMillis());
+                        long elapsed = System.currentTimeMillis() - threadStartTimes.get(workerIndex);
+                        threadTimeLabels.get(workerIndex).setText(formatMillis(elapsed));
+                    }
+
+                    long javaThreadId = Thread.currentThread().getId();
+                    appendProgress(String.format("[Paralelo] Bloque #%d (Hilo Java: %d) filas %d/%d procesando...\n",
+                        workerIndex+1, javaThreadId, rowsCompletedForWorker, rowsTotalForWorker));
+                    display(tblC, C);
                 });
             }
 
             @Override
             public void onWorkerStarted(int workerIndex, int endpointIndex) {
                 SwingUtilities.invokeLater(() -> {
-                    if (endpointIndex >= servers.size()) {
-                        appendProgress(String.format("Hilo #%d INICIA [Filas: %d-%d]\n", workerIndex+1, workerIndex * ((A.length + finalTotalWorkers - 1) / finalTotalWorkers) + 1, Math.min(A.length, (workerIndex + 1) * ((A.length + finalTotalWorkers - 1) / finalTotalWorkers))));
-                        if (workerIndex < threadStartTimes.size()) threadStartTimes.set(workerIndex, System.currentTimeMillis());
-                    }
+                    long javaThreadId = Thread.currentThread().getId();
+                    appendProgress(String.format("[Paralelo] Bloque #%d (Hilo Java: %d) INICIA [Filas: %d-%d]\n",
+                        workerIndex+1, javaThreadId,
+                        workerIndex * ((A.length + finalTotalWorkers - 1) / finalTotalWorkers) + 1,
+                        Math.min(A.length, (workerIndex + 1) * ((A.length + finalTotalWorkers - 1) / finalTotalWorkers))));
+                    if (workerIndex < threadStartTimes.size()) threadStartTimes.set(workerIndex, System.currentTimeMillis());
                 });
             }
 
             @Override
             public void onWorkerFinished(int workerIndex, int endpointIndex) {
                 SwingUtilities.invokeLater(() -> {
-                    if (endpointIndex >= servers.size()) {
-                        appendSuccess(String.format("Hilo #%d TERMINA\n", workerIndex+1));
-                        if (workerIndex < threadBars.size()) {
-                            JProgressBar pb = threadBars.get(workerIndex);
-                            pb.setString("Completado");
-                        }
+                    long javaThreadId = Thread.currentThread().getId();
+                    appendSuccess(String.format("[Paralelo] Bloque #%d (Hilo Java: %d) TERMINA\n", workerIndex+1, javaThreadId));
+                    if (workerIndex < threadBars.size()) {
+                        JProgressBar pb = threadBars.get(workerIndex);
+                        pb.setString("Completado");
                     }
                 });
             }
         };
-
+        
         // Ejecutar en background
         new Thread(() -> {
             try {
