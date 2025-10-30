@@ -683,7 +683,11 @@ public class AppGUI extends JFrame {
                 lbl.setPreferredSize(new Dimension(160, 18));
                 p.add(lbl, BorderLayout.WEST);
 
-                JProgressBar pb = new JProgressBar(0, rowsPerWorker);
+                int from = t * rowsPerWorker;
+                int to = Math.min(n, (t+1) * rowsPerWorker);
+                int actualRows = Math.max(0, to - from);
+
+                JProgressBar pb = new JProgressBar(0, actualRows);
                 pb.setStringPainted(true);
                 pb.setValue(0);
                 threadBars.add(pb);
@@ -694,9 +698,7 @@ public class AppGUI extends JFrame {
                 p.add(timeLbl, BorderLayout.EAST);
                 threadTimeLabels.add(timeLbl);
 
-                int from = t * rowsPerWorker;
-                int to = Math.min(n, (t+1) * rowsPerWorker);
-                threadTotalRows.add(Math.max(0, to - from));
+                threadTotalRows.add(actualRows);
                 threadStartTimes.add(0L);
 
                 threadStatusPanel.add(p);

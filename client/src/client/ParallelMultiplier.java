@@ -198,9 +198,9 @@ public class ParallelMultiplier {
                         sem.acquireUninterruptibly();
                         try {
                             if (endpointPrepared[endpointIndex]) {
-                                blockResult = stub.multiplyBlockPrepared(A_block, startRow, effectiveServerThreadCount);
+                                blockResult = stub.multiplyBlockPrepared(A_block, workerIndex, startRow, effectiveServerThreadCount);
                             } else {
-                                blockResult = stub.multiplyBlock(A_block, B, startRow, effectiveServerThreadCount);
+                                blockResult = stub.multiplyBlock(A_block, B, workerIndex, startRow, effectiveServerThreadCount);
                             }
                         } finally {
                             sem.release();

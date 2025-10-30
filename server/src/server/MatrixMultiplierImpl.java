@@ -177,9 +177,10 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
     }
 
     @Override
-    public int[][] multiplyBlock(int[][] A_block, int[][] B, int rowOffset, int threadCount)
+    public int[][] multiplyBlock(int[][] A_block, int[][] B, int blockIndex, int rowOffset, int threadCount)
             throws RemoteException {
         logger.resetLocalIds();
+        logger.setCurrentBlockIndex(blockIndex);
         resetProgress(A_block.length);
         int actualThreads = (threadCount <= 0) ? Runtime.getRuntime().availableProcessors() : threadCount;
         // Info eliminada, solo logs de hilos
@@ -207,8 +208,10 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
     }
 
     @Override
-    public int[][] multiplyBlockPrepared(int[][] A_block, int rowOffset, int threadCount)
+    public int[][] multiplyBlockPrepared(int[][] A_block, int blockIndex, int rowOffset, int threadCount)
             throws RemoteException {
+        logger.resetLocalIds();
+        logger.setCurrentBlockIndex(blockIndex);
         if (preparedB == null) throw new RemoteException("No B prepared on server. Call prepareB(B) first.");
         int rows = (A_block == null) ? 0 : A_block.length;
         if (rows == 0) return new int[0][0];
