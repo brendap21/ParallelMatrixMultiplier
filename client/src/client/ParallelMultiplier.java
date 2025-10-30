@@ -94,6 +94,7 @@ public class ParallelMultiplier {
         if (totalWorkers <= 0) totalWorkers = Math.min(n, endpointCount);
 
         // Modo: hilos por endpoint. Interpretamos 'totalWorkers' como hilos por endpoint.
+        final int effectiveServerThreadCount = (serverThreadCount <= 0) ? 0 : serverThreadCount;
         final int perEndpointWorkers = (totalWorkers <= 0) ? 1 : totalWorkers;
         int totalAssignedWorkers = Math.max(1, endpointCount * perEndpointWorkers);
 
