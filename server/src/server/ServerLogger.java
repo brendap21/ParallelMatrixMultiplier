@@ -11,6 +11,26 @@ public class ServerLogger {
     private final ConcurrentHashMap<Long, Integer> threadLocalId = new ConcurrentHashMap<>();
     private final ThreadLocal<Integer> localId = ThreadLocal.withInitial(() -> -1);
     private final AtomicInteger nextLocalId = new AtomicInteger(1);
+    
+    // Obtiene el nombre del hilo real del pool (ej. "ForkJoinPool-1-worker-3" o "pool-1-thread-2")
+    private String poolThreadName() {
+        return Thread.currentThread().getName();
+    }
+
+    // Extrae el índice numérico al final del nombre del hilo (ej. 3 o 2)
+    private int poolThreadIndex() {
+        String name = poolThreadName();
+        int i = name.length() - 1;
+        while (i >= 0 && Character.isDigit(name.charAt(i))) i--;
+        if (i < name.length() - 1) {
+            try {
+                return Integer.parseInt(name.substring(i + 1));
+            } catch (NumberFormatException ignored) {}
+        }
+        // fallback: usar id local asignado si existe
+        int id = localId.get();
+        return id > 0 ? id : -1;
+    }
 
     // Llamar a esto al inicio de cada petición para reiniciar la numeración
     public void resetLocalIds() {
@@ -41,7 +61,13 @@ public class ServerLogger {
         int assignedId = nextLocalId.getAndIncrement();
         threadLocalId.put(javaThreadId, assignedId);
         localId.set(assignedId);
-        System.out.printf("[Paralelo][Servidor] Hilo #%d INICIA [Filas: %d-%d]%n", assignedId, startRow+1, endRow);
+        int poolIdx = poolThreadIndex();
+        String name = poolThreadName();
+        // Mostrar el nombre real del hilo del pool y su índice si se pudo extraer
+        if (poolIdx > 0)
+            System.out.printf("[Paralelo][Servidor] %s (Hilo #%d) INICIA [Filas: %d-%d]%n", name, poolIdx, startRow+1, endRow);
+        else
+            System.out.printf("[Paralelo][Servidor] %s INICIA [Filas: %d-%d]%n", name, startRow+1, endRow);
     }
 
     // Log de progreso de hilo (por fila)
@@ -50,7 +76,12 @@ public class ServerLogger {
         ThreadInfo info = threadInfo.get(javaThreadId);
         Integer id = threadLocalId.get(javaThreadId);
         if (info != null && id != null) {
-            System.out.printf("[Paralelo][Servidor] Hilo #%d fila %d procesando...%n", id, currentRow+1);
+            int poolIdx = poolThreadIndex();
+            String name = poolThreadName();
+            if (poolIdx > 0)
+                System.out.printf("[Paralelo][Servidor] %s (Hilo #%d) fila %d procesando...%n", name, poolIdx, currentRow+1);
+            else
+                System.out.printf("[Paralelo][Servidor] %s fila %d procesando...%n", name, currentRow+1);
         }
     }
 
@@ -61,7 +92,12 @@ public class ServerLogger {
         Integer id = threadLocalId.get(javaThreadId);
         if (info != null && id != null) {
             Duration elapsed = Duration.between(info.startTime, LocalDateTime.now());
-            System.out.printf("[ÉXITO] [Paralelo][Servidor] Hilo #%d TERMINA [Filas: %d-%d] - Tiempo: %.3fs%n", id, info.startRow+1, info.endRow, elapsed.toMillis()/1000.0);
+            int poolIdx = poolThreadIndex();
+            String name = poolThreadName();
+            if (poolIdx > 0)
+                System.out.printf("[ÉXITO] [Paralelo][Servidor] %s (Hilo #%d) TERMINA [Filas: %d-%d] - Tiempo: %.3fs%n", name, poolIdx, info.startRow+1, info.endRow, elapsed.toMillis()/1000.0);
+            else
+                System.out.printf("[ÉXITO] [Paralelo][Servidor] %s TERMINA [Filas: %d-%d] - Tiempo: %.3fs%n", name, info.startRow+1, info.endRow, elapsed.toMillis()/1000.0);
             threadInfo.remove(javaThreadId);
             threadLocalId.remove(javaThreadId);
         }
