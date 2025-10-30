@@ -496,12 +496,12 @@ public class AppGUI extends JFrame {
 
             exec.submit(() -> {
                 threadStartTimes.set(threadIndex, System.currentTimeMillis());
-                appendProgress(String.format("Hilo #%d INICIA [Filas: %d-%d]\n", threadIndex+1, from+1, to));
+                appendProgress(String.format("[Concurrente] Hilo #%d INICIA [Filas: %d-%d]\n", threadIndex+1, from+1, to));
                 long hiloStart = System.currentTimeMillis();
                 try {
                     for (int i = from; i < to; i++) {
                         if ((i - from) % 10 == 0) {
-                            appendProgress(String.format("Hilo #%d fila %d procesando...\n", threadIndex+1, i+1));
+                            appendProgress(String.format("[Concurrente] Hilo #%d fila %d procesando...\n", threadIndex+1, i+1));
                         }
                         for (int j = 0; j < n; j++) {
                             int sum = 0;
@@ -530,10 +530,10 @@ public class AppGUI extends JFrame {
                         });
                     }
                 } catch (Exception ex) {
-                    SwingUtilities.invokeLater(() -> appendError("❌ Hilo #" + (threadIndex + 1) + " ERROR: " + ex.getMessage()));
+                    SwingUtilities.invokeLater(() -> appendError("❌ [Concurrente] Hilo #" + (threadIndex + 1) + " ERROR: " + ex.getMessage()));
                 } finally {
                     long hiloEnd = System.currentTimeMillis();
-                    appendSuccess(String.format("Hilo #%d TERMINA [Filas: %d-%d] - Tiempo: %.3fs\n", threadIndex+1, from+1, to, (hiloEnd-hiloStart)/1000.0));
+                    appendSuccess(String.format("[Concurrente] Hilo #%d TERMINA [Filas: %d-%d] - Tiempo: %.3fs\n", threadIndex+1, from+1, to, (hiloEnd-hiloStart)/1000.0));
                     latch.countDown();
                     SwingUtilities.invokeLater(() -> {
                         // marcar hilo completado si terminó todas sus filas
