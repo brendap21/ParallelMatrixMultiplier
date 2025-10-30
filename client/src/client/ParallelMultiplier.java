@@ -93,25 +93,16 @@ public class ParallelMultiplier {
         int n = A.length;
         if (totalWorkers <= 0) totalWorkers = Math.min(n, endpointCount);
 
-        // Compute effective server thread count and a sensible parallelism per endpoint.
-        final int effectiveServerThreadCount = (serverThreadCount <= 0) ? 0 : serverThreadCount;
-        // default parallel requests per endpoint (controls how many simultaneous RMI calls we allow)
-        int maxParallelRequestsPerEndpoint = 2;
-        if (effectiveServerThreadCount > 0) {
-            // allow a few concurrent requests without wildly oversubscribing the server
-            maxParallelRequestsPerEndpoint = Math.max(1, Math.min(4, effectiveServerThreadCount / 2));
-        }
-
-        // Limit the total number of worker tasks so we don't cause excessive repeated serialization of B.
-        int totalAssignedWorkers = Math.min(totalWorkers, endpointCount * maxParallelRequestsPerEndpoint);
-        if (totalAssignedWorkers <= 0) totalAssignedWorkers = 1;
+        // Modo: hilos por endpoint. Interpretamos 'totalWorkers' como hilos por endpoint.
+        final int perEndpointWorkers = (totalWorkers <= 0) ? 1 : totalWorkers;
+        int totalAssignedWorkers = Math.max(1, endpointCount * perEndpointWorkers);
 
         int rowsPerWorker = (n + totalAssignedWorkers - 1) / totalAssignedWorkers; // ceil
 
         final List<Semaphore> endpointSemaphores = new ArrayList<>(endpointCount);
         for (int i = 0; i < endpointCount; i++) {
-            // allow up to maxParallelRequestsPerEndpoint simultaneous requests to each endpoint
-            endpointSemaphores.add(new Semaphore(maxParallelRequestsPerEndpoint));
+            // permitir 'perEndpointWorkers' solicitudes simultáneas por endpoint
+            endpointSemaphores.add(new Semaphore(perEndpointWorkers));
         }
 
         final ConcurrentMultiplier localConcurrent;
@@ -137,7 +128,7 @@ public class ParallelMultiplier {
             }
         }
 
-    int execPoolSize = Math.min(totalAssignedWorkers, Math.max(1, endpointCount * maxParallelRequestsPerEndpoint));
+    int execPoolSize = totalAssignedWorkers;
         ExecutorService exec = Executors.newFixedThreadPool(execPoolSize);
         CountDownLatch finishLatch = new CountDownLatch(totalAssignedWorkers);
 
@@ -148,19 +139,21 @@ public class ParallelMultiplier {
 
         // Asignar localId incremental solo para workers locales
         int localWorkerId = 1;
-        for (int w = 0; w < totalAssignedWorkers; w++) {
-            final int workerIndex = w;
-            final int startRow = workerIndex * rowsPerWorker;
-            final int endRow = Math.min(n, (workerIndex + 1) * rowsPerWorker);
-            final int totalForWorker = Math.max(0, endRow - startRow);
+        for (int e = 0; e < endpointCount; e++) {
+            for (int w = 0; w < perEndpointWorkers; w++) {
+                final int workerIndex = e * perEndpointWorkers + w;
+                if (workerIndex >= totalAssignedWorkers) break;
+                final int startRow = workerIndex * rowsPerWorker;
+                final int endRow = Math.min(n, (workerIndex + 1) * rowsPerWorker);
+                final int totalForWorker = Math.max(0, endRow - startRow);
 
-            final int endpointIndex = workerIndex % endpointCount;
-            final MatrixMultiplier stub = stubs.get(endpointIndex); // null => local
+                final int endpointIndex = e;
+                final MatrixMultiplier stub = stubs.get(endpointIndex); // null => local
 
-            // Solo para workers locales, asignar un id local
-            final int localId = (stub == null) ? localWorkerId++ : -1;
+                // Solo para workers locales, asignar un id local
+                final int localId = (stub == null) ? localWorkerId++ : -1;
 
-            exec.submit(() -> {
+                exec.submit(() -> {
                 try {
                     if (totalForWorker <= 0) {
                         if (callback != null) callback.onWorkerStarted(workerIndex, endpointIndex);
@@ -234,6 +227,7 @@ public class ParallelMultiplier {
                     finishLatch.countDown();
                 }
             });
+            }
         }
 
     finishLatch.await(1, TimeUnit.HOURS);

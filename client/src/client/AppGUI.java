@@ -128,7 +128,7 @@ public class AppGUI extends JFrame {
         threadStatusPanel = new JPanel();
         threadStatusPanel.setLayout(new BoxLayout(threadStatusPanel, BoxLayout.Y_AXIS));
         JScrollPane threadScroll = new JScrollPane(threadStatusPanel);
-        threadScroll.setPreferredSize(new Dimension(320, 260));
+    threadScroll.setPreferredSize(new Dimension(400, 260));
         threadScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         pnlStatusRow.add(threadScroll);
 
@@ -151,16 +151,20 @@ public class AppGUI extends JFrame {
         pnlStatusRow.add(pnlTimes);
 
         // PANEL 3: consola/logs (JTextPane para colores)
-        statusPane = new JTextPane();
+        statusPane = new JTextPane() {
+            @Override
+            public boolean getScrollableTracksViewportWidth() { return false; }
+        };
         statusPane.setEditable(true); // copiable
-        statusPane.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        statusPane.setFont(new Font("Monospaced", Font.PLAIN, 11));
         statusDoc = statusPane.getStyledDocument();
         statusPane.addCaretListener(e -> {
             JScrollBar vbar = ((JScrollPane)statusPane.getParent().getParent()).getVerticalScrollBar();
             autoScroll = vbar.getValue() + vbar.getVisibleAmount() >= vbar.getMaximum();
         });
-        JScrollPane logScroll = new JScrollPane(statusPane);
-        logScroll.setPreferredSize(new Dimension(520, 260));
+    JScrollPane logScroll = new JScrollPane(statusPane);
+    logScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+    logScroll.setPreferredSize(new Dimension(460, 260));
 
         // Filtros y botones
         JPanel logControlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
@@ -177,7 +181,7 @@ public class AppGUI extends JFrame {
         JPanel logPanel = new JPanel(new BorderLayout());
         logPanel.add(logControlPanel, BorderLayout.NORTH);
         logPanel.add(logScroll, BorderLayout.CENTER);
-        logPanel.setPreferredSize(new Dimension(520, 260));
+    logPanel.setPreferredSize(new Dimension(460, 260));
         pnlStatusRow.add(Box.createRigidArea(new Dimension(10,0)));
         pnlStatusRow.add(logPanel);
 
@@ -649,51 +653,61 @@ public class AppGUI extends JFrame {
         progressBar.setValue(0);
         progressBar.setString("0%");
 
-        int rowsPerWorker = (n + totalWorkers - 1) / totalWorkers; // ceil
-        // Crear barras con etiqueta de servidor
+    // Calcular número real de workers asignados en modo 'hilos por endpoint'
+    int endpointCount = servers.size() + (includeLocal ? 1 : 0);
+    if (endpointCount <= 0) endpointCount = 1;
+    int perEndpointWorkers = Math.max(1, totalWorkers);
+    int totalAssignedWorkers = endpointCount * perEndpointWorkers;
+
+    int rowsPerWorker = (n + totalAssignedWorkers - 1) / totalAssignedWorkers; // ceil
+        // Crear barras agrupadas por endpoint para cada worker real asignado
         resetThreadPanel();
-        for (int t = 0; t < totalWorkers; t++) {
-            JPanel p = new JPanel();
-            p.setLayout(new BorderLayout(6,6));
-            p.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY), new EmptyBorder(6,6,6,6)));
-
-            // Determinar a qué servidor corresponde este worker
+        for (int e = 0; e < endpointCount; e++) {
             String serverLabel;
-            int endpointIndex = t % (servers.size() + (includeLocal ? 1 : 0));
-            if (endpointIndex < servers.size()) {
-                serverLabel = servers.get(endpointIndex).host;
-            } else {
-                serverLabel = "Local";
+            if (e < servers.size()) serverLabel = servers.get(e).host; else serverLabel = "Local";
+            JLabel header = new JLabel("Endpoint: " + serverLabel);
+            header.setFont(header.getFont().deriveFont(Font.BOLD));
+            header.setBorder(new EmptyBorder(4,4,4,4));
+            threadStatusPanel.add(header);
+            threadStatusPanel.add(Box.createRigidArea(new Dimension(0,4)));
+
+            for (int w = 0; w < perEndpointWorkers; w++) {
+                int t = e * perEndpointWorkers + w;
+                if (t >= totalAssignedWorkers) break;
+
+                JPanel p = new JPanel();
+                p.setLayout(new BorderLayout(6,6));
+                p.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY), new EmptyBorder(6,6,6,6)));
+
+                JLabel lbl = new JLabel("Bloque #" + (t+1) + " [" + serverLabel + "]");
+                lbl.setPreferredSize(new Dimension(160, 18));
+                p.add(lbl, BorderLayout.WEST);
+
+                JProgressBar pb = new JProgressBar(0, rowsPerWorker);
+                pb.setStringPainted(true);
+                pb.setValue(0);
+                threadBars.add(pb);
+                p.add(pb, BorderLayout.CENTER);
+
+                JLabel timeLbl = new JLabel("0 ms");
+                timeLbl.setPreferredSize(new Dimension(70, 18));
+                p.add(timeLbl, BorderLayout.EAST);
+                threadTimeLabels.add(timeLbl);
+
+                int from = t * rowsPerWorker;
+                int to = Math.min(n, (t+1) * rowsPerWorker);
+                threadTotalRows.add(Math.max(0, to - from));
+                threadStartTimes.add(0L);
+
+                threadStatusPanel.add(p);
+                threadStatusPanel.add(Box.createRigidArea(new Dimension(0,6)));
             }
-
-            JLabel lbl = new JLabel("Bloque #" + (t+1) + " [" + serverLabel + "]");
-            lbl.setPreferredSize(new Dimension(160, 18));
-            p.add(lbl, BorderLayout.WEST);
-
-            JProgressBar pb = new JProgressBar(0, rowsPerWorker);
-            pb.setStringPainted(true);
-            pb.setValue(0);
-            threadBars.add(pb);
-            p.add(pb, BorderLayout.CENTER);
-
-            JLabel timeLbl = new JLabel("0 ms");
-            timeLbl.setPreferredSize(new Dimension(70, 18));
-            p.add(timeLbl, BorderLayout.EAST);
-            threadTimeLabels.add(timeLbl);
-
-            int from = t * rowsPerWorker;
-            int to = Math.min(n, (t+1) * rowsPerWorker);
-            threadTotalRows.add(Math.max(0, to - from));
-            threadStartTimes.add(0L);
-
-            threadStatusPanel.add(p);
-            threadStatusPanel.add(Box.createRigidArea(new Dimension(0,6)));
         }
         threadStatusPanel.revalidate();
         threadStatusPanel.repaint();
 
-        // Make a final copy of totalWorkers to allow capture by inner classes / lambdas
-        final int finalTotalWorkers = totalWorkers;
+    // Usar el número real de workers para sincronizar con el callback
+    final int finalTotalWorkers = totalAssignedWorkers;
 
         appendInfo("Iniciando ejecución paralelo distribuido con " + finalTotalWorkers + " hilos locales y remotos...\n");
 
