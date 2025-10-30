@@ -655,13 +655,9 @@ public class AppGUI extends JFrame {
         // Make a final copy of totalWorkers to allow capture by inner classes / lambdas
         final int finalTotalWorkers = totalWorkers;
 
-        appendInfo("Iniciando ejecución paralelo distribuido con " + finalTotalWorkers + " workers sobre " +
-            servers.size() + " servidores (cliente local: " + includeLocal +
-            ", hilos servidor: " + serverThreadCount + ")...\n");
+        appendInfo("Iniciando ejecución paralelo distribuido con " + finalTotalWorkers + " hilos locales y remotos...\n");
 
-        // ParallelMultiplier ya no recibe chunkSize
         ParallelMultiplier pm = new ParallelMultiplier();
-
         long startTime = System.currentTimeMillis();
 
         ProgressCallback cb = new ProgressCallback() {
@@ -669,52 +665,53 @@ public class AppGUI extends JFrame {
             public void onChunkCompleted(int workerIndex, int endpointIndex, int rowsCompletedForWorker,
                                          int rowsTotalForWorker, int globalCompleted, int globalTotal) {
                 SwingUtilities.invokeLater(() -> {
-                    // actualizar barra global
-                    progressBar.setValue(globalCompleted);
-                    int percent = (int) (100.0 * progressBar.getValue() / progressBar.getMaximum());
-                    progressBar.setString(percent + "%");
+                    // Solo mostrar logs de hilos locales (cliente)
+                    if (endpointIndex >= servers.size()) {
+                        // actualizar barra global
+                        progressBar.setValue(globalCompleted);
+                        int percent = (int) (100.0 * progressBar.getValue() / progressBar.getMaximum());
+                        progressBar.setString(percent + "%");
 
-                    // actualizar barra worker
-                    if (workerIndex < threadBars.size()) {
-                        JProgressBar pb = threadBars.get(workerIndex);
-                        int newVal = Math.min(pb.getMaximum(), rowsCompletedForWorker);
-                        pb.setValue(newVal);
-                        pb.setString(newVal + "/" + threadTotalRows.get(workerIndex));
+                        // actualizar barra hilo
+                        if (workerIndex < threadBars.size()) {
+                            JProgressBar pb = threadBars.get(workerIndex);
+                            int newVal = Math.min(pb.getMaximum(), rowsCompletedForWorker);
+                            pb.setValue(newVal);
+                            pb.setString(newVal + "/" + threadTotalRows.get(workerIndex));
+                        }
+
+                        // actualizar tiempo estimado del hilo
+                        if (workerIndex < threadTimeLabels.size()) {
+                            if (threadStartTimes.get(workerIndex) == 0L) threadStartTimes.set(workerIndex, System.currentTimeMillis());
+                            long elapsed = System.currentTimeMillis() - threadStartTimes.get(workerIndex);
+                            threadTimeLabels.get(workerIndex).setText(formatMillis(elapsed));
+                        }
+
+                        appendProgress(String.format("Hilo #%d filas %d/%d procesando...\n", workerIndex+1, rowsCompletedForWorker, rowsTotalForWorker));
+                        display(tblC, C);
                     }
-
-                    // actualizar tiempo estimado del worker (simple)
-                    if (workerIndex < threadTimeLabels.size()) {
-                        if (threadStartTimes.get(workerIndex) == 0L) threadStartTimes.set(workerIndex, System.currentTimeMillis());
-                        long elapsed = System.currentTimeMillis() - threadStartTimes.get(workerIndex);
-                        threadTimeLabels.get(workerIndex).setText(formatMillis(elapsed));
-                    }
-
-                    // Mostrar log identificando endpoint (si endpointIndex >= servers.size() es local)
-                    String srvLabel = (endpointIndex < servers.size()) ? ("srv " + (endpointIndex+1)) : "cliente(local)";
-                    appendProgress("[Paralelo] Worker#" + (workerIndex + 1) + " (" + srvLabel + ") filas " +
-                            rowsCompletedForWorker + "/" + rowsTotalForWorker + "  -> global " + globalCompleted + "/" + globalTotal + "\n");
-
-                    display(tblC, C);
                 });
             }
 
             @Override
             public void onWorkerStarted(int workerIndex, int endpointIndex) {
                 SwingUtilities.invokeLater(() -> {
-                    String srvLabel = (endpointIndex < servers.size()) ? ("srv " + (endpointIndex+1)) : "cliente(local)";
-                    appendProgress("[Paralelo] Worker#" + (workerIndex+1) + " STARTED on " + srvLabel + "\n");
-                    if (workerIndex < threadStartTimes.size()) threadStartTimes.set(workerIndex, System.currentTimeMillis());
+                    if (endpointIndex >= servers.size()) {
+                        appendProgress(String.format("Hilo #%d INICIA [Filas: %d-%d]\n", workerIndex+1, workerIndex * ((A.length + finalTotalWorkers - 1) / finalTotalWorkers) + 1, Math.min(A.length, (workerIndex + 1) * ((A.length + finalTotalWorkers - 1) / finalTotalWorkers))));
+                        if (workerIndex < threadStartTimes.size()) threadStartTimes.set(workerIndex, System.currentTimeMillis());
+                    }
                 });
             }
 
             @Override
             public void onWorkerFinished(int workerIndex, int endpointIndex) {
                 SwingUtilities.invokeLater(() -> {
-                    String srvLabel = (endpointIndex < servers.size()) ? ("srv " + (endpointIndex+1)) : "cliente(local)";
-                    appendProgress("[Paralelo] Worker#" + (workerIndex+1) + " FINISHED (" + srvLabel + ")\n");
-                    if (workerIndex < threadBars.size()) {
-                        JProgressBar pb = threadBars.get(workerIndex);
-                        pb.setString("Completado (" + srvLabel + ")");
+                    if (endpointIndex >= servers.size()) {
+                        appendSuccess(String.format("Hilo #%d TERMINA\n", workerIndex+1));
+                        if (workerIndex < threadBars.size()) {
+                            JProgressBar pb = threadBars.get(workerIndex);
+                            pb.setString("Completado");
+                        }
                     }
                 });
             }

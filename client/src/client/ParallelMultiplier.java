@@ -146,7 +146,6 @@ public class ParallelMultiplier {
 
             final int endpointIndex = workerIndex % endpointCount;
             final MatrixMultiplier stub = stubs.get(endpointIndex); // null => local
-            final ServerInfo endpointInfo = endpointsInfo.get(endpointIndex);
 
             exec.submit(() -> {
                 try {
@@ -166,27 +165,11 @@ public class ParallelMultiplier {
                     int[][] blockResult;
                     if (stub == null) {
                         int localThreads = (effectiveServerThreadCount > 0) ? effectiveServerThreadCount : Runtime.getRuntime().availableProcessors();
-                        // LOGS EN LA GUI DEL CLIENTE PARA PROCESAMIENTO LOCAL
                         long hiloStart = System.currentTimeMillis();
-                        // --- NUEVO: LOGS EN CONSOLA Y GUI COMO EN CONCURRENTEMULTIPLIER ---
                         if (logger != null) logger.threadStart(workerIndex, startRow, endRow);
-                        if (callback != null) {
-                            SwingUtilities.invokeLater(() -> {
-                                // Log de inicio
-                                client.AppGUI gui = client.AppGUI.getInstanceIfExists();
-                                if (gui != null) gui.appendProgress(String.format("Hilo #%d INICIA [Filas: %d-%d]\n", workerIndex+1, startRow+1, endRow));
-                            });
-                        }
                         blockResult = new int[totalForWorker][B[0].length];
                         for (int i = 0; i < totalForWorker; i++) {
                             if (logger != null) logger.threadProgress(workerIndex, startRow + i);
-                            if (i % 10 == 0 && callback != null) {
-                                final int fila = i;
-                                SwingUtilities.invokeLater(() -> {
-                                    client.AppGUI gui = client.AppGUI.getInstanceIfExists();
-                                    if (gui != null) gui.appendProgress(String.format("Hilo #%d fila %d procesando...\n", workerIndex+1, startRow+fila+1));
-                                });
-                            }
                             for (int j = 0; j < B[0].length; j++) {
                                 int s = 0;
                                 for (int k = 0; k < B.length; k++) s += A_block[i][k] * B[k][j];
@@ -194,22 +177,13 @@ public class ParallelMultiplier {
                             }
                         }
                         if (logger != null) logger.threadComplete(workerIndex);
-                        if (callback != null) {
-                            long hiloEnd = System.currentTimeMillis();
-                            SwingUtilities.invokeLater(() -> {
-                                client.AppGUI gui = client.AppGUI.getInstanceIfExists();
-                                if (gui != null) gui.appendSuccess(String.format("Hilo #%d TERMINA [Filas: %d-%d] - Tiempo: %.3fs\n", workerIndex+1, startRow+1, endRow, (hiloEnd-hiloStart)/1000.0));
-                            });
-                        }
                     } else {
                         Semaphore sem = endpointSemaphores.get(endpointIndex);
                         sem.acquireUninterruptibly();
                         try {
                             if (endpointPrepared[endpointIndex]) {
-                                // use prepared B on server to avoid re-sending B
                                 blockResult = stub.multiplyBlockPrepared(A_block, startRow, effectiveServerThreadCount);
                             } else {
-                                // fallback: send B with each call
                                 blockResult = stub.multiplyBlock(A_block, B, startRow, effectiveServerThreadCount);
                             }
                         } finally {
