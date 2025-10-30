@@ -181,10 +181,8 @@ public class ParallelMultiplier {
                         for (int i = 0; i < totalForWorker; i++) {
                             if (logger != null && gui != null) {
                                 int filaActual = startRow + i + 1;
-                                if ((i % 10) == 0) {
-                                    int filaFin = endRow;
-                                    SwingUtilities.invokeLater(() -> gui.appendProgress(String.format("[Paralelo][Local] Hilo #%d fila %d procesando...\n", workerIndex+1, filaActual)));
-                                }
+                                // Mostrar cada fila procesada en la GUI del cliente
+                                SwingUtilities.invokeLater(() -> gui.appendProgress(String.format("[Paralelo][Local] Hilo #%d fila %d procesando...\n", workerIndex+1, filaActual)));
                             }
                             for (int j = 0; j < B[0].length; j++) {
                                 int s = 0;
