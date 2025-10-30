@@ -58,6 +58,7 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
     @Override
     public int[][] multiply(int[][] A, int[][] B)
             throws RemoteException {
+        logger.resetLocalIds();
         int n = A.length, p = B[0].length, m = B.length;
         int[][] C = new int[n][p];
         for (int i = 0; i < n; i++)
@@ -70,6 +71,7 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
     @Override
     public int[][] multiplyConcurrent(int[][] A, int[][] B, int threadCount)
             throws RemoteException {
+        logger.resetLocalIds();
         int n = A.length, p = B[0].length, m = B.length;
         int[][] C = new int[n][p];
         int useThreads = (threadCount <= 0) ? Runtime.getRuntime().availableProcessors() : threadCount;
@@ -139,6 +141,7 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
     @Override
     public int[][] multiplyConcurrentSegment(int[][] A, int[][] B, int rowStart, int rowEnd, int threadCount)
             throws RemoteException {
+        logger.resetLocalIds();
         // Valida límites
         if (rowStart < 0) rowStart = 0;
         if (rowEnd > A.length) rowEnd = A.length;
@@ -176,6 +179,7 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
     @Override
     public int[][] multiplyBlock(int[][] A_block, int[][] B, int rowOffset, int threadCount)
             throws RemoteException {
+        logger.resetLocalIds();
         resetProgress(A_block.length);
         int actualThreads = (threadCount <= 0) ? Runtime.getRuntime().availableProcessors() : threadCount;
         // Info eliminada, solo logs de hilos

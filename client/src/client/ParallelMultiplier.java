@@ -146,6 +146,8 @@ public class ParallelMultiplier {
         final Object globalLock = new Object();
         final int[] globalDone = {0};
 
+        // Asignar localId incremental solo para workers locales
+        int localWorkerId = 1;
         for (int w = 0; w < totalAssignedWorkers; w++) {
             final int workerIndex = w;
             final int startRow = workerIndex * rowsPerWorker;
@@ -154,6 +156,9 @@ public class ParallelMultiplier {
 
             final int endpointIndex = workerIndex % endpointCount;
             final MatrixMultiplier stub = stubs.get(endpointIndex); // null => local
+
+            // Solo para workers locales, asignar un id local
+            final int localId = (stub == null) ? localWorkerId++ : -1;
 
             exec.submit(() -> {
                 try {
@@ -175,14 +180,13 @@ public class ParallelMultiplier {
                         int localThreads = (effectiveServerThreadCount > 0) ? effectiveServerThreadCount : Runtime.getRuntime().availableProcessors();
                         long hiloStart = System.currentTimeMillis();
                         if (logger != null && gui != null) {
-                            SwingUtilities.invokeLater(() -> gui.appendProgress(String.format("[Paralelo][Local] Hilo #%d INICIA [Filas: %d-%d]\n", workerIndex+1, startRow+1, endRow)));
+                            SwingUtilities.invokeLater(() -> gui.appendProgress(String.format("[Paralelo][Local] Hilo #%d INICIA [Filas: %d-%d]\n", localId, startRow+1, endRow)));
                         }
                         blockResult = new int[totalForWorker][B[0].length];
                         for (int i = 0; i < totalForWorker; i++) {
                             if (logger != null && gui != null) {
                                 int filaActual = startRow + i + 1;
-                                // Mostrar cada fila procesada en la GUI del cliente
-                                SwingUtilities.invokeLater(() -> gui.appendProgress(String.format("[Paralelo][Local] Hilo #%d fila %d procesando...\n", workerIndex+1, filaActual)));
+                                SwingUtilities.invokeLater(() -> gui.appendProgress(String.format("[Paralelo][Local] Hilo #%d fila %d procesando...\n", localId, filaActual)));
                             }
                             for (int j = 0; j < B[0].length; j++) {
                                 int s = 0;
@@ -193,7 +197,7 @@ public class ParallelMultiplier {
                         if (logger != null && gui != null) {
                             long hiloEnd = System.currentTimeMillis();
                             double secs = (hiloEnd-hiloStart)/1000.0;
-                            SwingUtilities.invokeLater(() -> gui.appendSuccess(String.format("[Paralelo][Local] Hilo #%d TERMINA [Filas: %d-%d] - Tiempo: %.3fs\n", workerIndex+1, startRow+1, endRow, secs)));
+                            SwingUtilities.invokeLater(() -> gui.appendSuccess(String.format("[Paralelo][Local] Hilo #%d TERMINA [Filas: %d-%d] - Tiempo: %.3fs\n", localId, startRow+1, endRow, secs)));
                         }
                     } else {
                         Semaphore sem = endpointSemaphores.get(endpointIndex);
