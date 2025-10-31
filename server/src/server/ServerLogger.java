@@ -9,9 +9,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class ServerLogger {
     private final ConcurrentHashMap<Long, ThreadInfo> threadInfo = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Long, Integer> threadLocalId = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Long, Integer> threadBlockIndex = new ConcurrentHashMap<>();
     private final ThreadLocal<Integer> localId = ThreadLocal.withInitial(() -> -1);
     private final AtomicInteger nextLocalId = new AtomicInteger(1);
-    private volatile int currentBlockIndex = -1;
     
     // Obtiene el nombre del hilo real del pool (ej. "ForkJoinPool-1-worker-3" o "pool-1-thread-2")
     private String poolThreadName() {
@@ -37,10 +37,12 @@ public class ServerLogger {
     public void resetLocalIds() {
         nextLocalId.set(1);
         threadLocalId.clear();
+        threadBlockIndex.clear();
     }
 
     public void setCurrentBlockIndex(int blockIndex) {
-        this.currentBlockIndex = blockIndex;
+        long javaThreadId = Thread.currentThread().getId();
+        threadBlockIndex.put(javaThreadId, blockIndex);
     }
 
     private static class ThreadInfo {
@@ -69,9 +71,10 @@ public class ServerLogger {
         int poolIdx = poolThreadIndex();
         String name = poolThreadName();
         // Mostrar el bloque global y el número de hilo
-        String blockInfo = (currentBlockIndex >= 0) ? String.format("[Bloque Global #%d]", currentBlockIndex + 1) : "";
+        Integer blockIdx = threadBlockIndex.get(javaThreadId);
+        String blockInfo = (blockIdx != null && blockIdx >= 0) ? String.format("[Bloque Global #%d] ", blockIdx + 1) : "";
         if (poolIdx > 0)
-            System.out.printf("[Paralelo]%s (Hilo #%d) INICIA [Filas: %d-%d]%n", blockInfo, poolIdx, startRow+1, endRow);
+            System.out.printf("[Paralelo]%s(Hilo #%d) INICIA [Filas: %d-%d]%n", blockInfo, poolIdx, startRow+1, endRow);
         else
             System.out.printf("[Paralelo]%s INICIA [Filas: %d-%d]%n", blockInfo, startRow+1, endRow);
     }
@@ -84,9 +87,10 @@ public class ServerLogger {
         if (info != null && id != null) {
             int poolIdx = poolThreadIndex();
             String name = poolThreadName();
-            String blockInfo = (currentBlockIndex >= 0) ? String.format("[Bloque Global #%d] ", currentBlockIndex + 1) : "";
+            Integer blockIdx = threadBlockIndex.get(javaThreadId);
+            String blockInfo = (blockIdx != null && blockIdx >= 0) ? String.format("[Bloque Global #%d] ", blockIdx + 1) : "";
             if (poolIdx > 0)
-                System.out.printf("[Paralelo]%s (Hilo #%d) fila %d procesando...%n", blockInfo, poolIdx, currentRow+1);
+                System.out.printf("[Paralelo]%s(Hilo #%d) fila %d procesando...%n", blockInfo, poolIdx, currentRow+1);
             else
                 System.out.printf("[Paralelo]%s fila %d procesando...%n", blockInfo, currentRow+1);
         }
@@ -101,13 +105,15 @@ public class ServerLogger {
             Duration elapsed = Duration.between(info.startTime, LocalDateTime.now());
             int poolIdx = poolThreadIndex();
             String name = poolThreadName();
-            String blockInfo = (currentBlockIndex >= 0) ? String.format("[Bloque Global #%d] ", currentBlockIndex + 1) : "";
+            Integer blockIdx = threadBlockIndex.get(javaThreadId);
+            String blockInfo = (blockIdx != null && blockIdx >= 0) ? String.format("[Bloque Global #%d] ", blockIdx + 1) : "";
             if (poolIdx > 0)
                 System.out.printf("[ÉXITO] [Paralelo]%s(Hilo #%d) TERMINA [Filas: %d-%d] - Tiempo: %.3fs%n", blockInfo, poolIdx, info.startRow+1, info.endRow, elapsed.toMillis()/1000.0);
             else
                 System.out.printf("[ÉXITO] [Paralelo]%s TERMINA [Filas: %d-%d] - Tiempo: %.3fs%n", blockInfo, info.startRow+1, info.endRow, elapsed.toMillis()/1000.0);
             threadInfo.remove(javaThreadId);
             threadLocalId.remove(javaThreadId);
+            threadBlockIndex.remove(javaThreadId);
         }
     }
 }

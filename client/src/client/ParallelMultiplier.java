@@ -47,7 +47,7 @@ public class ParallelMultiplier {
     public interface ProgressCallback {
         void onChunkCompleted(int workerIndex, int endpointIndex, int rowsCompletedForWorker,
                               int rowsTotalForWorker, int globalCompleted, int globalTotal);
-        void onWorkerStarted(int workerIndex, int endpointIndex);
+        void onWorkerStarted(int workerIndex, int endpointIndex, int startRow, int endRow);
         void onWorkerFinished(int workerIndex, int endpointIndex);
     }
 
@@ -157,12 +157,12 @@ public class ParallelMultiplier {
                 exec.submit(() -> {
                 try {
                     if (totalForWorker <= 0) {
-                        if (callback != null) callback.onWorkerStarted(workerIndex, endpointIndex);
+                        if (callback != null) callback.onWorkerStarted(workerIndex, endpointIndex, startRow, endRow);
                         if (callback != null) callback.onWorkerFinished(workerIndex, endpointIndex);
                         return;
                     }
 
-                    if (callback != null) callback.onWorkerStarted(workerIndex, endpointIndex);
+                    if (callback != null) callback.onWorkerStarted(workerIndex, endpointIndex, startRow, endRow);
 
                     int[][] A_block = new int[totalForWorker][A[0].length];
                     for (int i = 0; i < totalForWorker; i++) {

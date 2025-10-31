@@ -757,10 +757,19 @@ public class AppGUI extends JFrame {
             }
 
             @Override
-            public void onWorkerStarted(int workerIndex, int endpointIndex) {
+            public void onWorkerStarted(int workerIndex, int endpointIndex, int startRow, int endRow) {
                 SwingUtilities.invokeLater(() -> {
-                    appendProgress(String.format("[Paralelo] Hilo #%d INICIA [Filas: %d-%d]\n", workerIndex+1, workerIndex * ((A.length + finalTotalWorkers - 1) / finalTotalWorkers) + 1, Math.min(A.length, (workerIndex + 1) * ((A.length + finalTotalWorkers - 1) / finalTotalWorkers))));
+                    appendProgress(String.format("[Paralelo] Hilo #%d INICIA [Filas: %d-%d]\n", workerIndex+1, startRow+1, endRow));
                     if (workerIndex < threadStartTimes.size()) threadStartTimes.set(workerIndex, System.currentTimeMillis());
+                    // Actualizar el máximo y total de filas con el valor real calculado por ParallelMultiplier
+                    int actualRows = endRow - startRow;
+                    if (workerIndex < threadBars.size()) {
+                        JProgressBar pb = threadBars.get(workerIndex);
+                        pb.setMaximum(actualRows);
+                    }
+                    if (workerIndex < threadTotalRows.size()) {
+                        threadTotalRows.set(workerIndex, actualRows);
+                    }
                 });
             }
 
