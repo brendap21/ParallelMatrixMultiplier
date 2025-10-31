@@ -774,9 +774,14 @@ public class AppGUI extends JFrame {
             }
 
             @Override
-            public void onWorkerFinished(int workerIndex, int endpointIndex) {
+            public void onWorkerFinished(int workerIndex, int endpointIndex, long serverProcessingTimeMillis) {
                 SwingUtilities.invokeLater(() -> {
-                    appendSuccess(String.format("[Paralelo] Hilo #%d TERMINA\n", workerIndex+1));
+                    // Mostrar el tiempo de procesamiento del servidor
+                    if (workerIndex < threadTimeLabels.size()) {
+                        threadTimeLabels.get(workerIndex).setText(formatMillis(serverProcessingTimeMillis));
+                    }
+                    
+                    appendSuccess(String.format("[Paralelo] Hilo #%d TERMINA - Tiempo: %.3fs\n", workerIndex+1, serverProcessingTimeMillis / 1000.0));
                     if (workerIndex < threadBars.size()) {
                         JProgressBar pb = threadBars.get(workerIndex);
                         pb.setString("Completado");

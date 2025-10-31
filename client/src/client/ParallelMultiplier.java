@@ -1,6 +1,7 @@
 package client;
 
 import shared.MatrixMultiplier;
+import shared.BlockResult;
 
 import java.rmi.Naming;
 import java.util.List;
@@ -48,7 +49,7 @@ public class ParallelMultiplier {
         void onChunkCompleted(int workerIndex, int endpointIndex, int rowsCompletedForWorker,
                               int rowsTotalForWorker, int globalCompleted, int globalTotal);
         void onWorkerStarted(int workerIndex, int endpointIndex, int startRow, int endRow);
-        void onWorkerFinished(int workerIndex, int endpointIndex);
+        void onWorkerFinished(int workerIndex, int endpointIndex, long serverProcessingTimeMillis);
     }
 
     // Elimina chunkSize
@@ -158,18 +159,20 @@ public class ParallelMultiplier {
                 try {
                     if (totalForWorker <= 0) {
                         if (callback != null) callback.onWorkerStarted(workerIndex, endpointIndex, startRow, endRow);
-                        if (callback != null) callback.onWorkerFinished(workerIndex, endpointIndex);
+                        if (callback != null) callback.onWorkerFinished(workerIndex, endpointIndex, 0);
                         return;
                     }
-
-                    if (callback != null) callback.onWorkerStarted(workerIndex, endpointIndex, startRow, endRow);
 
                     int[][] A_block = new int[totalForWorker][A[0].length];
                     for (int i = 0; i < totalForWorker; i++) {
                         System.arraycopy(A[startRow + i], 0, A_block[i], 0, A[0].length);
                     }
 
+                    // Llamar a onWorkerStarted justo antes de procesar/enviar RMI
+                    if (callback != null) callback.onWorkerStarted(workerIndex, endpointIndex, startRow, endRow);
+
                     int[][] blockResult;
+                    long serverProcessingTime = 0;
                     if (stub == null) {
                         int localThreads = (effectiveServerThreadCount > 0) ? effectiveServerThreadCount : Runtime.getRuntime().availableProcessors();
                         long hiloStart = System.currentTimeMillis();
@@ -188,20 +191,23 @@ public class ParallelMultiplier {
                                 blockResult[i][j] = s;
                             }
                         }
+                        serverProcessingTime = System.currentTimeMillis() - hiloStart;
                         if (logger != null && gui != null) {
-                            long hiloEnd = System.currentTimeMillis();
-                            double secs = (hiloEnd-hiloStart)/1000.0;
+                            double secs = serverProcessingTime / 1000.0;
                             SwingUtilities.invokeLater(() -> gui.appendSuccess(String.format("[Paralelo][Local] Hilo #%d TERMINA [Filas: %d-%d] - Tiempo: %.3fs\n", localId, startRow+1, endRow, secs)));
                         }
                     } else {
                         Semaphore sem = endpointSemaphores.get(endpointIndex);
                         sem.acquireUninterruptibly();
                         try {
+                            BlockResult result;
                             if (endpointPrepared[endpointIndex]) {
-                                blockResult = stub.multiplyBlockPrepared(A_block, workerIndex, startRow, effectiveServerThreadCount);
+                                result = stub.multiplyBlockPrepared(A_block, workerIndex, startRow, effectiveServerThreadCount);
                             } else {
-                                blockResult = stub.multiplyBlock(A_block, B, workerIndex, startRow, effectiveServerThreadCount);
+                                result = stub.multiplyBlock(A_block, B, workerIndex, startRow, effectiveServerThreadCount);
                             }
+                            blockResult = result.result;
+                            serverProcessingTime = result.processingTimeMillis;
                         } finally {
                             sem.release();
                         }
@@ -220,10 +226,10 @@ public class ParallelMultiplier {
                     if (callback != null) callback.onChunkCompleted(workerIndex, endpointIndex,
                             totalForWorker, totalForWorker, globalNow, n);
 
-                    if (callback != null) callback.onWorkerFinished(workerIndex, endpointIndex);
+                    if (callback != null) callback.onWorkerFinished(workerIndex, endpointIndex, serverProcessingTime);
                 } catch (Exception ex) {
                     ex.printStackTrace();
-                    if (callback != null) callback.onWorkerFinished(workerIndex, endpointIndex);
+                    if (callback != null) callback.onWorkerFinished(workerIndex, endpointIndex, 0);
                 } finally {
                     finishLatch.countDown();
                 }

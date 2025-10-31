@@ -25,7 +25,7 @@ public interface MatrixMultiplier extends Remote {
     // rowOffset indica la fila global de A correspondiente a A_block[0].
     // Devuelve las filas calculadas (tamaño A_block.length x B[0].length).
     // threadCount <= 0 => servidor decide (#cores).
-    int[][] multiplyBlock(int[][] A_block, int[][] B, int blockIndex, int rowOffset, int threadCount)
+    BlockResult multiplyBlock(int[][] A_block, int[][] B, int blockIndex, int rowOffset, int threadCount)
             throws RemoteException;
 
     // PREPARE / cached B API: allow the client to upload B once to the server
@@ -38,6 +38,6 @@ public interface MatrixMultiplier extends Remote {
     // Multiply using a previously prepared B. A_block are the contiguous rows
     // corresponding to global rowOffset. Server must have B prepared first.
     // blockIndex: número de bloque global (para logs)
-    int[][] multiplyBlockPrepared(int[][] A_block, int blockIndex, int rowOffset, int threadCount)
+    BlockResult multiplyBlockPrepared(int[][] A_block, int blockIndex, int rowOffset, int threadCount)
             throws RemoteException;
 }

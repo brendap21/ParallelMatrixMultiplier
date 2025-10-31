@@ -5,6 +5,7 @@ import java.rmi.RemoteException;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import shared.MatrixMultiplier;
+import shared.BlockResult;
 
 /**
  * Implementación RMI que incluye:
@@ -177,15 +178,16 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
     }
 
     @Override
-    public int[][] multiplyBlock(int[][] A_block, int[][] B, int blockIndex, int rowOffset, int threadCount)
+    public BlockResult multiplyBlock(int[][] A_block, int[][] B, int blockIndex, int rowOffset, int threadCount)
             throws RemoteException {
+        long startTime = System.currentTimeMillis();
         logger.resetLocalIds();
         logger.setCurrentBlockIndex(blockIndex);
         resetProgress(A_block.length);
         int actualThreads = (threadCount <= 0) ? Runtime.getRuntime().availableProcessors() : threadCount;
         // Info eliminada, solo logs de hilos
         // A_block: rows x m (rows contiguas de A a partir de rowOffset)
-        if (A_block == null || A_block.length == 0) return new int[0][0];
+        if (A_block == null || A_block.length == 0) return new BlockResult(new int[0][0], 0);
         int rows = A_block.length;
         int p = B[0].length;
 
@@ -203,18 +205,20 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
             pool.shutdown();
         }
 
-    // Success eliminado, solo logs de hilos
-        return Cseg;
+        long processingTime = System.currentTimeMillis() - startTime;
+        // Success eliminado, solo logs de hilos
+        return new BlockResult(Cseg, processingTime);
     }
 
     @Override
-    public int[][] multiplyBlockPrepared(int[][] A_block, int blockIndex, int rowOffset, int threadCount)
+    public BlockResult multiplyBlockPrepared(int[][] A_block, int blockIndex, int rowOffset, int threadCount)
             throws RemoteException {
+        long startTime = System.currentTimeMillis();
         logger.resetLocalIds();
         logger.setCurrentBlockIndex(blockIndex);
         if (preparedB == null) throw new RemoteException("No B prepared on server. Call prepareB(B) first.");
         int rows = (A_block == null) ? 0 : A_block.length;
-        if (rows == 0) return new int[0][0];
+        if (rows == 0) return new BlockResult(new int[0][0], 0);
         int p = preparedB[0].length;
 
         int[][] Cseg = new int[rows][p];
@@ -232,8 +236,9 @@ public class MatrixMultiplierImpl extends UnicastRemoteObject implements MatrixM
             pool.shutdown();
         }
 
-    // Success eliminado, solo logs de hilos
-        return Cseg;
+        long processingTime = System.currentTimeMillis() - startTime;
+        // Success eliminado, solo logs de hilos
+        return new BlockResult(Cseg, processingTime);
     }
 
     // Tarea ForkJoin para bloques A_block que comienzan en índice 0..rows-1
