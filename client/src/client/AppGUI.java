@@ -407,6 +407,11 @@ public class AppGUI extends JFrame {
         if (ms < 1000) return ms + " ms";
         return String.format("%d.%03d s", ms / 1000, ms % 1000);
     }
+    
+    // Método público para formatear tiempo (usado por ParallelMultiplier)
+    public String formatTime(long ms) {
+        return formatMillis(ms);
+    }
 
     /** Ejecuta multiplicaciones secuencial con progreso en tiempo real */
     private void runSequential() {
@@ -795,7 +800,7 @@ public class AppGUI extends JFrame {
                     
                     // Solo mostrar log para servidores remotos (el local ya muestra sus propios logs)
                     if (endpointIndex < servers.size()) {
-                        appendSuccess(String.format("[Paralelo][%s] Hilo #%d TERMINA - Tiempo: %.3fs\n", endpointLabel, localThreadNum, serverProcessingTimeMillis / 1000.0));
+                        appendSuccess(String.format("[Paralelo][%s] Hilo #%d TERMINA - Tiempo: %s\n", endpointLabel, localThreadNum, formatMillis(serverProcessingTimeMillis)));
                     }
                     
                     if (workerIndex < threadBars.size()) {

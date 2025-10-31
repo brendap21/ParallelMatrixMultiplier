@@ -197,8 +197,8 @@ public class ParallelMultiplier {
                         }
                         serverProcessingTime = System.currentTimeMillis() - hiloStart;
                         if (logger != null && gui != null) {
-                            double secs = serverProcessingTime / 1000.0;
-                            SwingUtilities.invokeLater(() -> gui.appendSuccess(String.format("[ÉXITO] [Paralelo](Hilo #%d) TERMINA [Filas: %d-%d] - Tiempo: %.3fs\n", localThreadNum, startRow+1, endRow, secs)));
+                            long finalTime = serverProcessingTime;
+                            SwingUtilities.invokeLater(() -> gui.appendSuccess(String.format("[ÉXITO] [Paralelo](Hilo #%d) TERMINA [Filas: %d-%d] - Tiempo: %s\n", localThreadNum, startRow+1, endRow, gui.formatTime(finalTime))));
                         }
                     } else {
                         Semaphore sem = endpointSemaphores.get(endpointIndex);
