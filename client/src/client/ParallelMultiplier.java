@@ -174,16 +174,20 @@ public class ParallelMultiplier {
                     int[][] blockResult;
                     long serverProcessingTime = 0;
                     if (stub == null) {
+                        // Procesamiento local - calcular número de hilo local para logs consistentes
+                        int localThreadNum = (workerIndex % perEndpointWorkers) + 1;
+                        
                         int localThreads = (effectiveServerThreadCount > 0) ? effectiveServerThreadCount : Runtime.getRuntime().availableProcessors();
                         long hiloStart = System.currentTimeMillis();
                         if (logger != null && gui != null) {
-                            SwingUtilities.invokeLater(() -> gui.appendProgress(String.format("[Paralelo][Local] Hilo #%d INICIA [Filas: %d-%d]\n", localId, startRow+1, endRow)));
+                            SwingUtilities.invokeLater(() -> gui.appendProgress(String.format("[Paralelo](Hilo #%d) INICIA [Filas: %d-%d]\n", localThreadNum, startRow+1, endRow)));
                         }
                         blockResult = new int[totalForWorker][B[0].length];
                         for (int i = 0; i < totalForWorker; i++) {
                             if (logger != null && gui != null) {
                                 int filaActual = startRow + i + 1;
-                                SwingUtilities.invokeLater(() -> gui.appendProgress(String.format("[Paralelo][Local] Hilo #%d fila %d procesando...\n", localId, filaActual)));
+                                int threadNum = localThreadNum; // Capturar para lambda
+                                SwingUtilities.invokeLater(() -> gui.appendProgress(String.format("[Paralelo](Hilo #%d) fila %d procesando...\n", threadNum, filaActual)));
                             }
                             for (int j = 0; j < B[0].length; j++) {
                                 int s = 0;
@@ -194,7 +198,7 @@ public class ParallelMultiplier {
                         serverProcessingTime = System.currentTimeMillis() - hiloStart;
                         if (logger != null && gui != null) {
                             double secs = serverProcessingTime / 1000.0;
-                            SwingUtilities.invokeLater(() -> gui.appendSuccess(String.format("[Paralelo][Local] Hilo #%d TERMINA [Filas: %d-%d] - Tiempo: %.3fs\n", localId, startRow+1, endRow, secs)));
+                            SwingUtilities.invokeLater(() -> gui.appendSuccess(String.format("[ÉXITO] [Paralelo](Hilo #%d) TERMINA [Filas: %d-%d] - Tiempo: %.3fs\n", localThreadNum, startRow+1, endRow, secs)));
                         }
                     } else {
                         Semaphore sem = endpointSemaphores.get(endpointIndex);

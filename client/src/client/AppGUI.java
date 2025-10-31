@@ -763,7 +763,11 @@ public class AppGUI extends JFrame {
                     int localThreadNum = (workerIndex % perEndpointWorkers) + 1;
                     String endpointLabel = (endpointIndex < servers.size()) ? servers.get(endpointIndex).host : "Local";
                     
-                    appendProgress(String.format("[Paralelo][%s] Hilo #%d INICIA [Filas: %d-%d]\n", endpointLabel, localThreadNum, startRow+1, endRow));
+                    // Solo mostrar log para servidores remotos (el local ya muestra sus propios logs)
+                    if (endpointIndex < servers.size()) {
+                        appendProgress(String.format("[Paralelo][%s] Hilo #%d INICIA [Filas: %d-%d]\n", endpointLabel, localThreadNum, startRow+1, endRow));
+                    }
+                    
                     if (workerIndex < threadStartTimes.size()) threadStartTimes.set(workerIndex, System.currentTimeMillis());
                     // Actualizar el máximo y total de filas con el valor real calculado por ParallelMultiplier
                     int actualRows = endRow - startRow;
@@ -789,7 +793,11 @@ public class AppGUI extends JFrame {
                         threadTimeLabels.get(workerIndex).setText(formatMillis(serverProcessingTimeMillis));
                     }
                     
-                    appendSuccess(String.format("[Paralelo][%s] Hilo #%d TERMINA - Tiempo: %.3fs\n", endpointLabel, localThreadNum, serverProcessingTimeMillis / 1000.0));
+                    // Solo mostrar log para servidores remotos (el local ya muestra sus propios logs)
+                    if (endpointIndex < servers.size()) {
+                        appendSuccess(String.format("[Paralelo][%s] Hilo #%d TERMINA - Tiempo: %.3fs\n", endpointLabel, localThreadNum, serverProcessingTimeMillis / 1000.0));
+                    }
+                    
                     if (workerIndex < threadBars.size()) {
                         JProgressBar pb = threadBars.get(workerIndex);
                         pb.setString("Completado");
