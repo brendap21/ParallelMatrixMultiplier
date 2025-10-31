@@ -656,7 +656,7 @@ public class AppGUI extends JFrame {
     // Calcular número real de workers asignados en modo 'hilos por endpoint'
     int endpointCount = servers.size() + (includeLocal ? 1 : 0);
     if (endpointCount <= 0) endpointCount = 1;
-    int perEndpointWorkers = Math.max(1, totalWorkers);
+    final int perEndpointWorkers = Math.max(1, totalWorkers);
     int totalAssignedWorkers = endpointCount * perEndpointWorkers;
 
     int rowsPerWorker = (n + totalAssignedWorkers - 1) / totalAssignedWorkers; // ceil
@@ -759,7 +759,11 @@ public class AppGUI extends JFrame {
             @Override
             public void onWorkerStarted(int workerIndex, int endpointIndex, int startRow, int endRow) {
                 SwingUtilities.invokeLater(() -> {
-                    appendProgress(String.format("[Paralelo] Hilo #%d INICIA [Filas: %d-%d]\n", workerIndex+1, startRow+1, endRow));
+                    // Calcular el número de hilo local para este endpoint (1-N)
+                    int localThreadNum = (workerIndex % perEndpointWorkers) + 1;
+                    String endpointLabel = (endpointIndex < servers.size()) ? servers.get(endpointIndex).host : "Local";
+                    
+                    appendProgress(String.format("[Paralelo][%s] Hilo #%d INICIA [Filas: %d-%d]\n", endpointLabel, localThreadNum, startRow+1, endRow));
                     if (workerIndex < threadStartTimes.size()) threadStartTimes.set(workerIndex, System.currentTimeMillis());
                     // Actualizar el máximo y total de filas con el valor real calculado por ParallelMultiplier
                     int actualRows = endRow - startRow;
@@ -776,12 +780,16 @@ public class AppGUI extends JFrame {
             @Override
             public void onWorkerFinished(int workerIndex, int endpointIndex, long serverProcessingTimeMillis) {
                 SwingUtilities.invokeLater(() -> {
+                    // Calcular el número de hilo local para este endpoint (1-N)
+                    int localThreadNum = (workerIndex % perEndpointWorkers) + 1;
+                    String endpointLabel = (endpointIndex < servers.size()) ? servers.get(endpointIndex).host : "Local";
+                    
                     // Mostrar el tiempo de procesamiento del servidor
                     if (workerIndex < threadTimeLabels.size()) {
                         threadTimeLabels.get(workerIndex).setText(formatMillis(serverProcessingTimeMillis));
                     }
                     
-                    appendSuccess(String.format("[Paralelo] Hilo #%d TERMINA - Tiempo: %.3fs\n", workerIndex+1, serverProcessingTimeMillis / 1000.0));
+                    appendSuccess(String.format("[Paralelo][%s] Hilo #%d TERMINA - Tiempo: %.3fs\n", endpointLabel, localThreadNum, serverProcessingTimeMillis / 1000.0));
                     if (workerIndex < threadBars.size()) {
                         JProgressBar pb = threadBars.get(workerIndex);
                         pb.setString("Completado");
