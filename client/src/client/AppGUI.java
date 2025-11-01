@@ -542,7 +542,8 @@ public class AppGUI extends JFrame {
                     SwingUtilities.invokeLater(() -> appendError("❌ [Concurrente] Hilo #" + (threadIndex + 1) + " ERROR: " + ex.getMessage()));
                 } finally {
                     long hiloEnd = System.currentTimeMillis();
-                    appendSuccess(String.format("[Concurrente] Hilo #%d TERMINA [Filas: %d-%d] - Tiempo: %.3fs\n", threadIndex+1, from+1, to, (hiloEnd-hiloStart)/1000.0));
+                    long finalElapsed = hiloEnd - hiloStart;
+                    appendSuccess(String.format("[Concurrente] Hilo #%d TERMINA [Filas: %d-%d] - Tiempo: %s\n", threadIndex+1, from+1, to, formatMillis(finalElapsed)));
                     latch.countDown();
                     SwingUtilities.invokeLater(() -> {
                         // marcar hilo completado si terminó todas sus filas
@@ -551,6 +552,8 @@ public class AppGUI extends JFrame {
                         if (pb.getValue() >= totalForThread) {
                             pb.setString("Completado");
                         }
+                        // asegurar que el tiempo mostrado coincide con el log final
+                        threadTimeLabels.get(threadIndex).setText(formatMillis(finalElapsed));
                     });
                 }
             });
