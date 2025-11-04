@@ -539,7 +539,7 @@ public class AppGUI extends JFrame {
                         });
                     }
                 } catch (Exception ex) {
-                    SwingUtilities.invokeLater(() -> appendError("❌ [Concurrente] Hilo #" + (threadIndex + 1) + " ERROR: " + ex.getMessage()));
+                    SwingUtilities.invokeLater(() -> appendError("[Concurrente] Hilo #" + (threadIndex + 1) + " ERROR: " + ex.getMessage()));
                 } finally {
                     long hiloEnd = System.currentTimeMillis();
                     long finalElapsed = hiloEnd - hiloStart;
